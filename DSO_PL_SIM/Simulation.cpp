@@ -5,6 +5,8 @@
 #include<random>
 #include<time.h>
 #define UEnumber 50
+#define outputPAT 1									//1: output PAT to txt file ; 0: store in program memory
+#define outputUEinfo 0								//1: output UE information to txt file ; 0: store in program memory
 
 using namespace std;
 
@@ -89,7 +91,7 @@ int main()
 	int AcrossTTI = 0;						//用來判斷UE的時間軸，packet的inter-arrival time有無跨過此TTI
 	for (int i = 0; i < UEnumber; i++)
 	{
-		cout << "UE" << i << endl;
+		//cout << "UE" << i << endl;
 		BufferTimer = 0.0;
 		AcrossTTI = 0;
 		string UEIndex = IntToString(i);
@@ -109,7 +111,8 @@ int main()
 					WriteFile.precision(3);
 					if (AcrossTTI)							//AcrossTTI = 1為inter arrival time有跨過此TTI; AcrossTTI=0為無
 					{
-						WriteFile << BufferTimer << endl;	//記錄每個packet的arrival time
+						if (outputPAT == 1)
+							WriteFile << BufferTimer << endl;	//記錄每個packet的arrival time
 						//TTIPacketCount++;
 					}						
 					else
@@ -127,7 +130,8 @@ int main()
 							AcrossTTI = 0;
 						else
 						{
-							WriteFile << BufferTimer << endl;	// 記錄每個packet的arrival time
+							if (outputPAT == 1)
+								WriteFile << BufferTimer << endl;	// 記錄每個packet的arrival time
 							//TTIPacketCount++;
 						}						
 					//cout << "Packet arrival time：" << BufferTimer << endl;
@@ -138,6 +142,33 @@ int main()
 		WriteFile.close();
 	}
 	cout << "Give PAT end." << endl;
+
+	//讀取所有UE的PAT先暫存起來
+	string UEPacketPatternFileName;						//UE packet pattern的檔案名稱
+	fstream ReadUEPAT;									//宣告fstream物件
+	char UEPacketArrivalTime[200];						//用來佔存txt每一行的資料
+	double ArrivalTime = 0.0;							//用來佔存抓出來每一行的資料
+	vector<double> TempPacketArrivalTime[UEnumber];		//用來暫存UE的packet pattern
+	int NumUETemp = UEnumber;
+	string NumUEIndex = IntToString(NumUETemp);
+	for (int i = 0; i<UEnumber; i++)
+	{
+		string UEIndex = IntToString(i);
+		UEPacketPatternFileName = "UE" + UEIndex + "_PAT.txt";
+		ReadUEPAT.open(UEPacketPatternFileName, ios::in);
+		if (!ReadUEPAT)
+			cout << "檔案無法開啟" << endl;
+		else
+		{
+			while (ReadUEPAT >> UEPacketArrivalTime)
+			{
+				ArrivalTime = atof(UEPacketArrivalTime);
+				TempPacketArrivalTime[i].push_back(ArrivalTime);
+			}
+		}
+		ReadUEPAT.close();
+	}
+
 
 	//Debug
 	for (int i = 0; i < UEnumber; i++)
