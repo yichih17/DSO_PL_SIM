@@ -19,9 +19,10 @@
 #define satisfied_TH 75
 
 //Simulation parameter
-#define simulation_time 100000	//ms(TTI
+#define simulation_time 10000	//ms(TTI
 #define UE_dis_mode 1			//0: uniform 1:hotspot
 #define UE_type_number 3		//DB = 50, 100, 300ms
+#define UEnumber 50
 
 #include<vector>
 
@@ -85,5 +86,112 @@ struct hotspot
 	double coor_y;
 };
 
+class BufferStatus
+{
+public:
+	int TempPacketArrivalTimeIndex[UEnumber];       // 用來紀錄在TempPacketArrivalTime這個vector抓取第幾個packet了
+	std::vector <double> PacketArrivalTime[UEnumber];     // packet的arrival time(ms)
+	std::vector <double> PacketHOLDelay[UEnumber];        // packet的HOL delay(ms)
+	double Buffer[UEnumber];                        // 每個UE在eNB裡對應buffer的資料量(bits)
+	double BeforeScheduleBuffer[UEnumber];          // 排程前buffer的量
+	double AfterScheduleBuffer[UEnumber];           // 排程後buffer的量
+	double HeadPacketSize[UEnumber];                // 每個UE buffer裡的第一個packet size有多大(bits)
+	BufferStatus()                               // 初始化class的變數
+	{
+		memset(TempPacketArrivalTimeIndex, 0, sizeof(TempPacketArrivalTimeIndex));
+		memset(Buffer, 0, sizeof(Buffer));
+		memset(BeforeScheduleBuffer, 0, sizeof(BeforeScheduleBuffer));
+		memset(AfterScheduleBuffer, 0, sizeof(AfterScheduleBuffer));
+		memset(HeadPacketSize, 0, sizeof(HeadPacketSize));
+	}
+};
+
+class SimulationResult
+{
+public:
+	double PastDataAmount[UEnumber];              // 每個UE在t時過去拿到的資料量
+	double AccumulateRate[UEnumber];              // 過去整個指數平均rate歷史          
+	int TotalPacketNum[UEnumber];                 // 每個UE在eNB裡對應buffer的來的總packete個數
+	int DiscardIncompletePacketNum[UEnumber];     // 用來計算被砍掉的不完整的packet有幾個
+	int DiscardPacketNum[UEnumber];               // 每個UE在eNB裡對應buffer裡discard的packet數
+	int SchedulePackerNum[UEnumber];              // 每個UE在eNB裡對應buffer裡schedule的packet數
+	double Throughput[UEnumber];                  // 每個UE的throughput
+	double Delay[UEnumber];                       // 每個UE的delay
+	double RateSatisfaction[UEnumber];            // 每個UE的rate satisfaction
+	double DelaySatisfaction[UEnumber];           // 每個UE的delay satisfaction
+	double TotalThroughput;                    // 用來記錄整體系統的throughput
+	int TotalSchedulePacketNum;                // 用來記錄整體系統排程多少packet
+	int TotalDiscardPacketNum;                 // 用來記錄整體系統砍多少packet
+	double AverageThroughput;                  // 用來記錄所有UE的平均throughput
+	double AverageDelay;                       // 用來記錄所有UE的平均delay
+	double PacketLossRatio;                    // 用來記錄整體系統的packet loss ratio	
+	double Type1_TotalThroughput;              // 用來記錄type1 UE的throughput
+	int Type1_SchedulePacketNum;               // 用來記錄type1 UE排程多少packet
+	int Type1_DiscardPacketNum;                // 用來記錄type1 UE砍多少packet
+	double Type1_AverageThroughput;            // 用來記錄type1 UE的平均throughput
+	double Type1_AverageDelay;                 // 用來記錄type1 UE的平均delay
+	double Type1_PacketLossRatio;              // 用來記錄type1 UE的packet loss ratio
+	double Type2_TotalThroughput;              // 用來記錄type2 UE的throughput
+	int Type2_SchedulePacketNum;               // 用來記錄type2 UE排程多少packet
+	int Type2_DiscardPacketNum;                // 用來記錄type2 UE砍多少packet	
+	double Type2_AverageThroughput;            // 用來記錄type2 UE的平均throughput
+	double Type2_AverageDelay;                 // 用來記錄type2 UE的平均delay
+	double Type2_PacketLossRatio;              // 用來記錄type2 UE的packet loss ratio
+	double Type3_TotalThroughput;              // 用來記錄type3 UE的throughput
+	int Type3_SchedulePacketNum;               // 用來記錄type3 UE排程多少packet
+	int Type3_DiscardPacketNum;                // 用來記錄type3 UE砍多少packet	
+	double Type3_AverageThroughput;            // 用來記錄type3 UE的平均throughput
+	double Type3_AverageDelay;                 // 用來記錄type3 UE的平均delay
+	double Type3_PacketLossRatio;              // 用來記錄type3 UE的packet loss ratio
+	double Type4_TotalThroughput;              // 用來記錄type4 UE的throughput
+	int Type4_SchedulePacketNum;               // 用來記錄type4 UE排程多少packet
+	int Type4_DiscardPacketNum;                // 用來記錄type4 UE砍多少packet	
+	double Type4_AverageThroughput;            // 用來記錄type4 UE的平均throughput
+	double Type4_AverageDelay;                 // 用來記錄type4 UE的平均delay
+	double Type4_PacketLossRatio;              // 用來記錄type4 UE的packet loss ratio
+	SimulationResult()                         // 初始化class的變數
+	{
+		memset(PastDataAmount, 0, sizeof(PastDataAmount));
+		memset(AccumulateRate, 1, sizeof(AccumulateRate));
+		memset(TotalPacketNum, 0, sizeof(TotalPacketNum));
+		memset(DiscardIncompletePacketNum, 0, sizeof(DiscardIncompletePacketNum));
+		memset(DiscardPacketNum, 0, sizeof(DiscardPacketNum));
+		memset(SchedulePackerNum, 0, sizeof(SchedulePackerNum));
+		memset(Throughput, 0, sizeof(Throughput));
+		memset(Delay, 0, sizeof(Delay));
+		memset(RateSatisfaction, 0, sizeof(RateSatisfaction));
+		memset(DelaySatisfaction, 0, sizeof(DelaySatisfaction));
+		TotalThroughput = 0.0;
+		TotalSchedulePacketNum = 0;
+		TotalDiscardPacketNum = 0;
+		AverageThroughput = 0.0;
+		AverageDelay = 0.0;
+		PacketLossRatio = 0.0;
+		Type1_TotalThroughput = 0.0;
+		Type1_SchedulePacketNum = 0;
+		Type1_DiscardPacketNum = 0;
+		Type1_AverageThroughput = 0.0;
+		Type1_AverageDelay = 0.0;
+		Type1_PacketLossRatio = 0.0;
+		Type2_TotalThroughput = 0.0;
+		Type2_SchedulePacketNum = 0;
+		Type2_DiscardPacketNum = 0;
+		Type2_AverageThroughput = 0.0;
+		Type2_AverageDelay = 0.0;
+		Type2_PacketLossRatio = 0.0;
+		Type3_TotalThroughput = 0.0;
+		Type3_SchedulePacketNum = 0;
+		Type3_DiscardPacketNum = 0;
+		Type3_AverageThroughput = 0.0;
+		Type3_AverageDelay = 0.0;
+		Type3_PacketLossRatio = 0.0;
+		Type4_TotalThroughput = 0.0;
+		Type4_SchedulePacketNum = 0;
+		Type4_DiscardPacketNum = 0;
+		Type4_AverageThroughput = 0.0;
+		Type4_AverageDelay = 0.0;
+		Type4_PacketLossRatio = 0.0;
+	}
+};
 
 #endif // !_DEFIEN_H
