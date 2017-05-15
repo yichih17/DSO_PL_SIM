@@ -511,35 +511,75 @@ int main()
 			//cout << "UE" << i << endl;
 			BufferTimer = 0.0;
 			AcrossTTI = 0;
-			string UEIndex = IntToString(i);
-			FileName = "UE" + UEIndex + "_PAT.txt";				//PAT=packet arrival time
-			WriteFile.open(FileName, ios::out | ios::trunc);	//記錄每個UE的PAT
-			if (WriteFile.fail())
-				cout << "檔案無法開啟" << endl;
+
+			if (outputPAT == 1)
+			{
+				string UEIndex = IntToString(i);
+				FileName = "UE" + UEIndex + "_PAT.txt";				//PAT=packet arrival time
+				WriteFile.open(FileName, ios::out | ios::trunc);	//記錄每個UE的PAT
+				if (WriteFile.fail())
+					cout << "檔案無法開啟" << endl;
+				else
+				{
+					for (int t = 0; t < simulation_time; t++)
+					{
+						int TTIPacketCount = 0;
+						//計算每個packet的到來時間點，並記錄此時TTI每個UE的buffer量
+						while (BufferTimer <= t + 1)				//用來計算此TTI來了幾個packet和此TTI結束時目前buffer裡的資料量
+						{
+							WriteFile.setf(ios::fixed, ios::floatfield);
+							WriteFile.precision(3);
+							if (AcrossTTI)							//AcrossTTI = 1為inter arrival time有跨過此TTI; AcrossTTI=0為無
+							{
+								WriteFile << BufferTimer << endl;	//記錄每個packet的arrival time
+								//TTIPacketCount++;
+							}
+							else
+							{
+								InterArrivalTime = exponentially_Distributed(UEList[i].lambdai);//亂數產生inter-arrival time
+								BufferTimer = BufferTimer + InterArrivalTime;                   //紀錄每個UE的時間軸
+							}
+							if (BufferTimer > t + 1)				//BufferTimer有無超過目前此TTI
+							{
+								AcrossTTI = 1;
+								break;
+							}
+							else
+								if (AcrossTTI)
+									AcrossTTI = 0;
+								else
+								{
+									WriteFile << BufferTimer << endl;	// 記錄每個packet的arrival time
+									//TTIPacketCount++;
+								}
+							//cout << "Packet arrival time：" << BufferTimer << endl;
+						}
+						//cout << "第" << t+1 << "個TTI的Packet數：" << TTIPacketCount << endl;
+					}
+				}
+				WriteFile.close();
+			}
 			else
 			{
 				for (int t = 0; t < simulation_time; t++)
 				{
 					int TTIPacketCount = 0;
 					//計算每個packet的到來時間點，並記錄此時TTI每個UE的buffer量
-					while (BufferTimer <= t + 1)				//用來計算此TTI來了幾個packet和此TTI結束時目前buffer裡的資料量
+					while (BufferTimer <= t + 1)												//用來計算此TTI來了幾個packet和此TTI結束時目前buffer裡的資料量
 					{
 						WriteFile.setf(ios::fixed, ios::floatfield);
 						WriteFile.precision(3);
-						if (AcrossTTI)							//AcrossTTI = 1為inter arrival time有跨過此TTI; AcrossTTI=0為無
+						if (AcrossTTI)															//AcrossTTI = 1為inter arrival time有跨過此TTI; AcrossTTI=0為無
 						{
-							if (outputPAT == 1)
-								WriteFile << BufferTimer << endl;	//記錄每個packet的arrival time
-							else
-								TempPacketArrivalTime[i].push_back(BufferTimer);
+							TempPacketArrivalTime[i].push_back(BufferTimer);					//記錄每個packet的arrival time
 							//TTIPacketCount++;
 						}
 						else
 						{
-							InterArrivalTime = exponentially_Distributed(UEList[i].lambdai);//亂數產生inter-arrival time
-							BufferTimer = BufferTimer + InterArrivalTime;                   //紀錄每個UE的時間軸
+							InterArrivalTime = exponentially_Distributed(UEList[i].lambdai);	//亂數產生inter-arrival time
+							BufferTimer = BufferTimer + InterArrivalTime;						//紀錄每個UE的時間軸
 						}
-						if (BufferTimer > t + 1)				//BufferTimer有無超過目前此TTI
+						if (BufferTimer > t + 1)												//BufferTimer有無超過目前此TTI
 						{
 							AcrossTTI = 1;
 							break;
@@ -549,10 +589,7 @@ int main()
 								AcrossTTI = 0;
 							else
 							{
-								if (outputPAT == 1)
-									WriteFile << BufferTimer << endl;	// 記錄每個packet的arrival time
-								else
-									TempPacketArrivalTime[i].push_back(BufferTimer);
+								TempPacketArrivalTime[i].push_back(BufferTimer);				//記錄每個packet的arrival time
 								//TTIPacketCount++;
 							}
 						//cout << "Packet arrival time：" << BufferTimer << endl;
@@ -560,34 +597,39 @@ int main()
 					//cout << "第" << t+1 << "個TTI的Packet數：" << TTIPacketCount << endl;
 				}
 			}
-			WriteFile.close();
+			
 		}
 		cout << "Give PAT end." << endl;
 
-		//讀取所有UE的PAT先暫存起來
-		string UEPacketPatternFileName;						//UE packet pattern的檔案名稱
-		fstream ReadUEPAT;									//宣告fstream物件
-		char UEPacketArrivalTime[200];						//用來佔存txt每一行的資料
-		double ArrivalTime = 0.0;							//用來佔存抓出來每一行的資料
-		int NumUETemp = UEnumber;
-		string NumUEIndex = IntToString(NumUETemp);
-		for (int i = 0; i < UEnumber; i++)
+
+		if (outputPAT == 1)
 		{
-			string UEIndex = IntToString(i);
-			UEPacketPatternFileName = "UE" + UEIndex + "_PAT.txt";
-			ReadUEPAT.open(UEPacketPatternFileName, ios::in);
-			if (!ReadUEPAT)
-				cout << "檔案無法開啟" << endl;
-			else
+			//讀取所有UE的PAT先暫存起來
+			string UEPacketPatternFileName;						//UE packet pattern的檔案名稱
+			fstream ReadUEPAT;									//宣告fstream物件
+			char UEPacketArrivalTime[200];						//用來佔存txt每一行的資料
+			double ArrivalTime = 0.0;							//用來佔存抓出來每一行的資料
+			int NumUETemp = UEnumber;
+			string NumUEIndex = IntToString(NumUETemp);
+			for (int i = 0; i < UEnumber; i++)
 			{
-				while (ReadUEPAT >> UEPacketArrivalTime)
+				string UEIndex = IntToString(i);
+				UEPacketPatternFileName = "UE" + UEIndex + "_PAT.txt";
+				ReadUEPAT.open(UEPacketPatternFileName, ios::in);
+				if (!ReadUEPAT)
+					cout << "檔案無法開啟" << endl;
+				else
 				{
-					ArrivalTime = atof(UEPacketArrivalTime);
-					TempPacketArrivalTime[i].push_back(ArrivalTime);
+					while (ReadUEPAT >> UEPacketArrivalTime)
+					{
+						ArrivalTime = atof(UEPacketArrivalTime);
+						TempPacketArrivalTime[i].push_back(ArrivalTime);
+					}
 				}
+				ReadUEPAT.close();
 			}
-			ReadUEPAT.close();
 		}
+		
 
 		//Simulation start
 		BufferStatus EqualRB_Buffer;
