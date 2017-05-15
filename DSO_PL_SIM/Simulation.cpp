@@ -4,11 +4,14 @@
 #include<sstream>
 #include<random>
 #include<time.h>
+#include<algorithm>
 
 #define outputPAT 1									//1: output PAT to txt file ; 0: store in program memory
 #define outputUEinfo 0								//1: output UE information to txt file ; 0: store in program memory
 
 using namespace std;
+
+void OutputResult(string Scheme, SimulationResult *Result);
 
 int LTECQIRange[] = { 1732, 1511, 1325, 1162, 1019, 894, 784, 688, 623, 565, 512, 449, 407, 357, 303 };
 UE UEList[UEnumber];
@@ -120,78 +123,109 @@ string IntToString(int &i)
 
 void Simulation_Result(UE *UEList, SimulationResult *Result)
 {
+	//Queueing model calculation
+	double AvgSystemTime = 0.0;
+	double Xj = 0.0;
+	double Xj2 = 0.0;
+	double Xj_paper = 0.0;
+	double Xj2_paper = 0.0;
+	double lambda = 0.0;
+	for (int i = 0; i < UEnumber; i++)
+		lambda = lambda + UEList[i].lambdai;
+	for (int i = 0; i < UEnumber; i++)
+	{
+		double weight_i = UEList[i].lambdai / lambda;
+
+		double Xij = UEList[i].packet_size / (resource_element * CQIEfficiency(UEList[i].CQI) * total_RBG);
+		Xj = Xj + Xij * weight_i;
+		Xj2 = Xj2 + pow(Xij, 2) * weight_i;
+
+		double Xij_paper = UEList[i].packet_size / (resource_element * CQIEfficiency(UEList[i].CQI) * total_RBG / UEnumber);
+		Xj_paper = Xj_paper + Xij_paper * weight_i;
+		Xj2_paper = Xj2_paper + pow(Xij_paper, 2) * weight_i;
+	}
+	//double rho = lambda * Xj;
+	Result->AvgSystemTime_paper = Xj_paper + lambda * Xj2_paper / (1 - lambda * Xj_paper);
+	double rho = lambda * Xj;
+	double right = lambda * Xj2 / (1 - lambda * Xj);
+	Result->AvgSystemTime = Xj + lambda * Xj2 / (1 - lambda * Xj);
+
 	// 計算整體的throughput、delay、schedule packet數、discard packet數
 	double DelayTemp = 0.0;
+	double SystemTimeTemp = 0.0;
 	double Type1_DelayTemp = 0.0;
 	double Type2_DelayTemp = 0.0;
 	double Type3_DelayTemp = 0.0;
 	for (int i = 0; i<UEnumber; i++)
 	{
 		Result->TotalThroughput = Result->TotalThroughput + Result->Throughput[i];
-		DelayTemp = DelayTemp + (Result->Delay[i] / Result->SchedulePackerNum[i]);
+		DelayTemp += Result->Delay[i];
+		SystemTimeTemp += Result->SystemTime[i];
 		Result->TotalSchedulePacketNum = Result->TotalSchedulePacketNum + Result->SchedulePackerNum[i];
 		Result->TotalDiscardPacketNum = Result->TotalDiscardPacketNum + Result->DiscardPacketNum[i];
 	}
 	Result->AverageThroughput = Result->TotalThroughput / UEnumber;
-	Result->AverageDelay = DelayTemp / UEnumber;
+	Result->AverageDelay = DelayTemp / Result->TotalSchedulePacketNum;
+	Result->AverageSystemTime = SystemTimeTemp / Result->TotalSchedulePacketNum;
 	Result->PacketLossRatio = ((double)Result->TotalDiscardPacketNum / (double)(Result->TotalSchedulePacketNum + Result->TotalDiscardPacketNum)) * 100;
 
-	// 計算typ1(VoIP)的throughput、delay、schedule packet數、discard packet數、rate滿意度、delay滿意度
-	if (DB50_UEnumber > 0)
-	{
-		for (int i = 0; i<DB50_UEnumber; i++)
-		{
-			Result->Type1_TotalThroughput = Result->Type1_TotalThroughput + Result->Throughput[i];
-			Type1_DelayTemp = Type1_DelayTemp + (Result->Delay[i] / Result->SchedulePackerNum[i]);
-			Result->Type1_SchedulePacketNum = Result->Type1_SchedulePacketNum + Result->SchedulePackerNum[i];
-			Result->Type1_DiscardPacketNum = Result->Type1_DiscardPacketNum + Result->DiscardPacketNum[i];
-			Result->RateSatisfaction[i] = (((Result->Throughput[i] * 1000000) / simulation_time) / UEList[i].bit_rate) * 100;
-			if (Result->RateSatisfaction[i] >= 100)
-				Result->RateSatisfaction[i] = 100;
-			Result->DelaySatisfaction[i] = ((double)Result->SchedulePackerNum[i] / (double)(Result->DiscardPacketNum[i] + Result->SchedulePackerNum[i])) * 100;
-		}
-		Result->Type1_AverageThroughput = Result->Type1_TotalThroughput / DB50_UEnumber;
-		Result->Type1_AverageDelay = Type1_DelayTemp / DB50_UEnumber;
-		Result->Type1_PacketLossRatio = ((double)Result->Type1_DiscardPacketNum / (double)(Result->Type1_SchedulePacketNum + Result->Type1_DiscardPacketNum)) * 100;
-	}
+	//// 計算typ1(VoIP)的throughput、delay、schedule packet數、discard packet數、rate滿意度、delay滿意度
+	//if (DB50_UEnumber > 0)
+	//{
+	//	for (int i = 0; i<DB50_UEnumber; i++)
+	//	{
+	//		Result->Type1_TotalThroughput = Result->Type1_TotalThroughput + Result->Throughput[i];
+	//		Type1_DelayTemp = Type1_DelayTemp + (Result->Delay[i] / Result->SchedulePackerNum[i]);
+	//		Result->Type1_SchedulePacketNum = Result->Type1_SchedulePacketNum + Result->SchedulePackerNum[i];
+	//		Result->Type1_DiscardPacketNum = Result->Type1_DiscardPacketNum + Result->DiscardPacketNum[i];
+	//		Result->RateSatisfaction[i] = (((Result->Throughput[i] * 1000000) / simulation_time) / UEList[i].bit_rate) * 100;
+	//		if (Result->RateSatisfaction[i] >= 100)
+	//			Result->RateSatisfaction[i] = 100;
+	//		Result->DelaySatisfaction[i] = ((double)Result->SchedulePackerNum[i] / (double)(Result->DiscardPacketNum[i] + Result->SchedulePackerNum[i])) * 100;
+	//	}
+	//	Result->Type1_AverageThroughput = Result->Type1_TotalThroughput / DB50_UEnumber;
+	//	Result->Type1_AverageDelay = Type1_DelayTemp / DB50_UEnumber;
+	//	Result->Type1_PacketLossRatio = ((double)Result->Type1_DiscardPacketNum / (double)(Result->Type1_SchedulePacketNum + Result->Type1_DiscardPacketNum)) * 100;
+	//}
 
-	// 計算type2(Video)的throughput、delay、schedule packet數、discard packet數、rate滿意度、delay滿意度
-	if (DB100_UEnumber > 0)
-	{
-		for (int i = DB50_UEnumber; i<DB50_UEnumber + DB100_UEnumber; i++)
-		{
-			Result->Type2_TotalThroughput = Result->Type2_TotalThroughput + Result->Throughput[i];
-			Type2_DelayTemp = Type2_DelayTemp + (Result->Delay[i] / Result->SchedulePackerNum[i]);
-			Result->Type2_SchedulePacketNum = Result->Type2_SchedulePacketNum + Result->SchedulePackerNum[i];
-			Result->Type2_DiscardPacketNum = Result->Type2_DiscardPacketNum + Result->DiscardPacketNum[i];
-			Result->RateSatisfaction[i] = (((Result->Throughput[i] * 1000000) / simulation_time) / UEList[i].bit_rate) * 100;
-			if (Result->RateSatisfaction[i] >= 100)
-				Result->RateSatisfaction[i] = 100;
-			Result->DelaySatisfaction[i] = ((double)Result->SchedulePackerNum[i] / (double)(Result->DiscardPacketNum[i] + Result->SchedulePackerNum[i])) * 100;
-		}
-		Result->Type2_AverageThroughput = Result->Type2_TotalThroughput / DB100_UEnumber;
-		Result->Type2_AverageDelay = Type2_DelayTemp / DB100_UEnumber;
-		Result->Type2_PacketLossRatio = ((double)Result->Type2_DiscardPacketNum / (double)(Result->Type2_SchedulePacketNum + Result->Type2_DiscardPacketNum)) * 100;
-	}
+	//// 計算type2(Video)的throughput、delay、schedule packet數、discard packet數、rate滿意度、delay滿意度
+	//if (DB100_UEnumber > 0)
+	//{
+	//	for (int i = DB50_UEnumber; i<DB50_UEnumber + DB100_UEnumber; i++)
+	//	{
+	//		Result->Type2_TotalThroughput = Result->Type2_TotalThroughput + Result->Throughput[i];
+	//		Type2_DelayTemp = Type2_DelayTemp + (Result->Delay[i] / Result->SchedulePackerNum[i]);
+	//		Result->Type2_SchedulePacketNum = Result->Type2_SchedulePacketNum + Result->SchedulePackerNum[i];
+	//		Result->Type2_DiscardPacketNum = Result->Type2_DiscardPacketNum + Result->DiscardPacketNum[i];
+	//		Result->RateSatisfaction[i] = (((Result->Throughput[i] * 1000000) / simulation_time) / UEList[i].bit_rate) * 100;
+	//		if (Result->RateSatisfaction[i] >= 100)
+	//			Result->RateSatisfaction[i] = 100;
+	//		Result->DelaySatisfaction[i] = ((double)Result->SchedulePackerNum[i] / (double)(Result->DiscardPacketNum[i] + Result->SchedulePackerNum[i])) * 100;
+	//	}
+	//	Result->Type2_AverageThroughput = Result->Type2_TotalThroughput / DB100_UEnumber;
+	//	Result->Type2_AverageDelay = Type2_DelayTemp / DB100_UEnumber;
+	//	Result->Type2_PacketLossRatio = ((double)Result->Type2_DiscardPacketNum / (double)(Result->Type2_SchedulePacketNum + Result->Type2_DiscardPacketNum)) * 100;
+	//}
 
-	// 計算type3的throughput、delay、schedule packet數、discard packet數、rate滿意度、delay滿意度
-	if (DB300_UEnumber > 0)
-	{
-		for (int i = DB50_UEnumber + DB100_UEnumber; i<DB50_UEnumber + DB100_UEnumber + DB300_UEnumber; i++)
-		{
-			Result->Type3_TotalThroughput = Result->Type3_TotalThroughput + Result->Throughput[i];
-			Type3_DelayTemp = Type3_DelayTemp + (Result->Delay[i] / Result->SchedulePackerNum[i]);
-			Result->Type3_SchedulePacketNum = Result->Type3_SchedulePacketNum + Result->SchedulePackerNum[i];
-			Result->Type3_DiscardPacketNum = Result->Type3_DiscardPacketNum + Result->DiscardPacketNum[i];
-			Result->RateSatisfaction[i] = (((Result->Throughput[i] * 1000000) / simulation_time) / UEList[i].bit_rate) * 100;
-			if (Result->RateSatisfaction[i] >= 100)
-				Result->RateSatisfaction[i] = 100;
-			Result->DelaySatisfaction[i] = ((double)Result->SchedulePackerNum[i] / (double)(Result->DiscardPacketNum[i] + Result->SchedulePackerNum[i])) * 100;
-		}
-		Result->Type3_AverageThroughput = Result->Type3_TotalThroughput / DB300_UEnumber;
-		Result->Type3_AverageDelay = Type3_DelayTemp / DB300_UEnumber;
-		Result->Type3_PacketLossRatio = ((double)Result->Type3_DiscardPacketNum / (double)(Result->Type3_SchedulePacketNum + Result->Type3_DiscardPacketNum)) * 100;
-	}
+	//// 計算type3的throughput、delay、schedule packet數、discard packet數、rate滿意度、delay滿意度
+	//if (DB300_UEnumber > 0)
+	//{
+	//	for (int i = DB50_UEnumber + DB100_UEnumber; i<DB50_UEnumber + DB100_UEnumber + DB300_UEnumber; i++)
+	//	{
+	//		Result->Type3_TotalThroughput = Result->Type3_TotalThroughput + Result->Throughput[i];
+	//		Type3_DelayTemp = Type3_DelayTemp + (Result->Delay[i] / Result->SchedulePackerNum[i]);
+	//		Result->Type3_SchedulePacketNum = Result->Type3_SchedulePacketNum + Result->SchedulePackerNum[i];
+	//		Result->Type3_DiscardPacketNum = Result->Type3_DiscardPacketNum + Result->DiscardPacketNum[i];
+	//		Result->RateSatisfaction[i] = (((Result->Throughput[i] * 1000000) / simulation_time) / UEList[i].bit_rate) * 100;
+	//		if (Result->RateSatisfaction[i] >= 100)
+	//			Result->RateSatisfaction[i] = 100;
+	//		Result->DelaySatisfaction[i] = ((double)Result->SchedulePackerNum[i] / (double)(Result->DiscardPacketNum[i] + Result->SchedulePackerNum[i])) * 100;
+	//	}
+	//	Result->Type3_AverageThroughput = Result->Type3_TotalThroughput / DB300_UEnumber;
+	//	Result->Type3_AverageDelay = Type3_DelayTemp / DB300_UEnumber;
+	//	Result->Type3_PacketLossRatio = ((double)Result->Type3_DiscardPacketNum / (double)(Result->Type3_SchedulePacketNum + Result->Type3_DiscardPacketNum)) * 100;
+	//}
+	OutputResult("EqualRB", Result);
 }
 
 void OutputResult(string Scheme, SimulationResult *Result)
@@ -210,48 +244,48 @@ void OutputResult(string Scheme, SimulationResult *Result)
 		cout << "檔案無法開啟" << endl;
 	else
 	{
-		Write_SimulationResultFile << Scheme << endl;
-		Write_SimulationResultFile << (Result->TotalThroughput * 1000 / simulation_time) * 1000 << endl;
+		//Write_SimulationResultFile << Scheme << " ";
+		Write_SimulationResultFile << (Result->TotalThroughput * 1000 / simulation_time) * 1000 << " " << Result->AverageSystemTime << " " << Result->AvgSystemTime << " " << Result->AvgSystemTime_paper << endl;
 		//Write_SimulationResultFile << (Result->AverageThroughput * 1000 / TTI) * 1000 << endl;
 		//Write_SimulationResultFile << Result->AverageDelay << endl;
 		//Write_SimulationResultFile << Result->PacketLossRatio << endl;
-		Write_SimulationResultFile << (Result->Type1_TotalThroughput * 1000 / simulation_time) * 1000 << endl;
+		//		Write_SimulationResultFile << (Result->Type1_TotalThroughput * 1000 / simulation_time) * 1000 << endl;
 		//Write_SimulationResultFile << (Result->Type1_AverageThroughput * 1000 / TTI) * 1000 << endl;
 		//Write_SimulationResultFile << Result->Type1_AverageDelay << endl;
 		//Write_SimulationResultFile << Result->Type1_PacketLossRatio << endl;
-		Write_SimulationResultFile << (Result->Type2_TotalThroughput * 1000 / simulation_time) * 1000 << endl;
+		//		Write_SimulationResultFile << (Result->Type2_TotalThroughput * 1000 / simulation_time) * 1000 << endl;
 		//Write_SimulationResultFile << (Result->Type2_AverageThroughput * 1000 / TTI) * 1000 << endl;
 		//Write_SimulationResultFile << Result->Type2_AverageDelay << endl;
 		//Write_SimulationResultFile << Result->Type2_PacketLossRatio << endl;	
-		Write_SimulationResultFile << (Result->Type3_TotalThroughput * 1000 / simulation_time) * 1000 << endl;
+		//		Write_SimulationResultFile << (Result->Type3_TotalThroughput * 1000 / simulation_time) * 1000 << endl;
 		//Write_SimulationResultFile << (Result->Type3_AverageThroughput * 1000 / TTI) * 1000 << endl;
 		//Write_SimulationResultFile << Result->Type3_AverageDelay << endl;
 		//Write_SimulationResultFile << Result->Type3_PacketLossRatio << endl;
 	}
 
-	RateSatisfactionFileName = Scheme + "_Rate SatisfactionFile.txt";
-	Write_RateSatisfactionFile.open(RateSatisfactionFileName, ios::out | ios::trunc);
-	if (Write_RateSatisfactionFile.fail())
-		cout << "檔案無法開啟" << endl;
-	else
-	{
-		Write_RateSatisfactionFile.setf(ios::fixed, ios::floatfield);
-		Write_RateSatisfactionFile.precision(4);
-		for (int i = 0; i<UEnumber; i++)
-			Write_RateSatisfactionFile << Result->RateSatisfaction[i] << endl;
-	}
+	//RateSatisfactionFileName = Scheme + "_Rate SatisfactionFile.txt";
+	//Write_RateSatisfactionFile.open(RateSatisfactionFileName, ios::out | ios::trunc);
+	//if (Write_RateSatisfactionFile.fail())
+	//	cout << "檔案無法開啟" << endl;
+	//else
+	//{
+	//	Write_RateSatisfactionFile.setf(ios::fixed, ios::floatfield);
+	//	Write_RateSatisfactionFile.precision(4);
+	//	for (int i = 0; i<UEnumber; i++)
+	//		Write_RateSatisfactionFile << Result->RateSatisfaction[i] << endl;
+	//}
 
-	DelaySatisfactionFileName = Scheme + "_Delay SatisfactionFile.txt";
-	Write_DelaySatisfactionFile.open(DelaySatisfactionFileName, ios::out | ios::trunc);
-	if (Write_DelaySatisfactionFile.fail())
-		cout << "檔案無法開啟" << endl;
-	else
-	{
-		Write_DelaySatisfactionFile.setf(ios::fixed, ios::floatfield);
-		Write_DelaySatisfactionFile.precision(4);
-		for (int i = 0; i<UEnumber; i++)
-			Write_DelaySatisfactionFile << Result->DelaySatisfaction[i] << endl;
-	}
+	//DelaySatisfactionFileName = Scheme + "_Delay SatisfactionFile.txt";
+	//Write_DelaySatisfactionFile.open(DelaySatisfactionFileName, ios::out | ios::trunc);
+	//if (Write_DelaySatisfactionFile.fail())
+	//	cout << "檔案無法開啟" << endl;
+	//else
+	//{
+	//	Write_DelaySatisfactionFile.setf(ios::fixed, ios::floatfield);
+	//	Write_DelaySatisfactionFile.precision(4);
+	//	for (int i = 0; i<UEnumber; i++)
+	//		Write_DelaySatisfactionFile << Result->DelaySatisfaction[i] << endl;
+	//}
 }
 
 void Buffer_Status(int t, BufferStatus *Queue, UE *UEList, vector <double> *TempPacketArrivalTime, SimulationResult *Result)
@@ -297,9 +331,10 @@ void Buffer_Status(int t, BufferStatus *Queue, UE *UEList, vector <double> *Temp
 				if (Queue->HeadPacketSize[i] < UEList[i].packet_size)
 					Result->DiscardIncompletePacketNum[i] = Result->DiscardIncompletePacketNum[i] + 1;		//用來計算被砍掉不完整的packet數
 
-				Queue->PacketHOLDelay[i].erase(Queue->PacketHOLDelay[i].begin());								//因為packet的HOL delay超過delay budget，所以要砍掉第一個packet
+				Queue->PacketHOLDelay[i].erase(Queue->PacketHOLDelay[i].begin());							//因為packet的HOL delay超過delay budget，所以要砍掉第一個packet
 				Result->DiscardPacketNum[i] = Result->DiscardPacketNum[i] + 1;								//累計discard掉的packet數
-				Queue->PacketArrivalTime[i].erase(Queue->PacketArrivalTime[i].begin());							//也刪掉它在PacketArrivalTime裡記錄的arrival time
+				Result->SystemTime[i] = Result->SystemTime[i] + (t + 1) - Queue->PacketArrivalTime[i][0];	//被discard掉的packet在系統的時間
+				Queue->PacketArrivalTime[i].erase(Queue->PacketArrivalTime[i].begin());						//也刪掉它在PacketArrivalTime裡記錄的arrival time
 				if (Queue->PacketHOLDelay[i].empty())
 					break;
 			}
@@ -318,28 +353,53 @@ void Buffer_Status(int t, BufferStatus *Queue, UE *UEList, vector <double> *Temp
 
 void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 {
-	int CQITable[total_RBG][UEnumber];				// 在t時，每個UE對應到每個RB的CQI值
 	double InstantRate[UEnumber] = { 0.0 };			// 在t時預計可以拿多少rate
 	double Priority = 0.0;							// scheduling時用的priority
 	int AssignedUE = 0;								// 哪個UE獲得了RB
 
-	// 先確定每個RB對每個UE的CQI是多少
-	for (int i = 0; i < total_RBG; i++)
-		for (int j = 0; j<UEnumber; j++)
-			CQITable[i][j] = UE[j].CQI;
-
+	vector <double> BuffrtPacketArrivalTime;
+	vector <int> BuffrtPacketUEOrder;
+	int NumUEHaveBufferPacket = 0;					//這個TTI有封包要傳送的UE個數
 	int NumBufferPacket = 0;
 	for (int j = 0; j < UEnumber; j++)
-		NumBufferPacket = NumBufferPacket + Queue->PacketArrivalTime[j].size();
-	if (NumBufferPacket == 0)
+	{
+		if (Queue->PacketArrivalTime[j].size() != 0)
+		{
+			NumUEHaveBufferPacket++;
+			for (int k = 0; k < Queue->PacketArrivalTime[j].size(); k++)
+			{
+				BuffrtPacketArrivalTime.push_back(Queue->PacketArrivalTime[j][k]);
+				BuffrtPacketUEOrder.push_back(j);
+				NumBufferPacket++;
+			}
+		}
+	}
+	if (BuffrtPacketArrivalTime.size() == 0)
 		return;
+
+	//Bubble Sort排序Arrival time先後
+	for (int j = BuffrtPacketArrivalTime.size() - 1; j > 0; j--)
+		for (int k = 0; k < j; k++)
+		{
+			if (BuffrtPacketArrivalTime[k] > BuffrtPacketArrivalTime[k + 1])
+			{
+				double tempT;
+				tempT = BuffrtPacketArrivalTime[k];
+				BuffrtPacketArrivalTime[k] = BuffrtPacketArrivalTime[k + 1];
+				BuffrtPacketArrivalTime[k + 1] = tempT;
+				int tempI;
+				tempI = BuffrtPacketUEOrder[k];
+				BuffrtPacketUEOrder[k] = BuffrtPacketUEOrder[k + 1];
+				BuffrtPacketUEOrder[k + 1] = tempI;
+			}
+		}
 
 	// 開始競標RB看要分配給哪個UE
 	for (int i = 0; i < total_RBG; i++)
 	{
-		AssignedUE = i / (total_RBG / UEnumber);
-		if (Queue->PacketArrivalTime[AssignedUE].size() == 0)
-			continue;
+		if (BuffrtPacketUEOrder.size() == 0)
+			break;
+		AssignedUE = BuffrtPacketUEOrder[i % NumUEHaveBufferPacket];
 
 		//分配RB給UE
 		double MaxPriority = 0.0;
@@ -357,6 +417,7 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 			if (Queue->HeadPacketSize[AssignedUE] > RBSizeSpace)	//第一個packet size比RB可攜帶的資料量大
 			{
 				Queue->HeadPacketSize[AssignedUE] = Queue->HeadPacketSize[AssignedUE] - RBSizeSpace;
+				Result->SystemTime[AssignedUE] = Result->SystemTime[AssignedUE] + RBSizeSpace / RBCarryBit;
 				RBSizeSpace = 0;
 				RBAssign = 0;
 			}
@@ -364,7 +425,15 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 			{
 				RBSizeSpace = RBSizeSpace - Queue->HeadPacketSize[AssignedUE];
 				Result->Delay[AssignedUE] = Result->Delay[AssignedUE] + ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);    // 計算每一個packet delay
+				double TransmissionTime = Queue->HeadPacketSize[AssignedUE] / RBCarryBit;					// Debug用
+				double WaitingTime = ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);					// Debug用
+				Result->SystemTime[AssignedUE] = Result->SystemTime[AssignedUE] + ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]) + Queue->HeadPacketSize[AssignedUE] / RBCarryBit;		// 計算傳送到UE的時間
 				Queue->PacketArrivalTime[AssignedUE].erase(Queue->PacketArrivalTime[AssignedUE].begin());
+				BuffrtPacketUEOrder.erase(BuffrtPacketUEOrder.begin() + (i % NumUEHaveBufferPacket));
+				if (Queue->PacketArrivalTime[AssignedUE].size() == 0)					
+					NumUEHaveBufferPacket--;
+				if (NumUEHaveBufferPacket == 0 && BuffrtPacketUEOrder.size() != 0)
+					cout << "stop" << endl;
 				Result->SchedulePackerNum[AssignedUE] = Result->SchedulePackerNum[AssignedUE] + 1;
 				Queue->PacketHOLDelay[AssignedUE].erase(Queue->PacketHOLDelay[AssignedUE].begin());
 				if (Queue->PacketArrivalTime[AssignedUE].empty())
@@ -529,9 +598,7 @@ int main()
 
 	Simulation_Result(UEList, &EqualRB_Result);
 
-	OutputResult("EqualRB", &EqualRB_Result);
-
 	//Debug
-	for (int i = 0; i < UEnumber; i++)
-		cout << UEList[i].bit_rate << " " << UEList[i].packet_size << " " << UEList[i].delay_budget << " " << UEList[i].coor_X << " " << UEList[i].coor_Y << " " << UEList[i].CQI << endl;
+	//for (int i = 0; i < UEnumber; i++)
+	//	cout << UEList[i].bit_rate << " " << UEList[i].packet_size << " " << UEList[i].delay_budget << " " << UEList[i].coor_X << " " << UEList[i].coor_Y << " " << UEList[i].CQI << endl;
 }
