@@ -333,11 +333,14 @@ void Buffer_Status(int t, BufferStatus *Queue, UE *UEList, vector <double> *Temp
 			{
 				//cout << PacketHOLDelay[i][0] << endl;
 				if (Queue->HeadPacketSize[i] < UEList[i].packet_size)
+				{
 					Result->DiscardIncompletePacketNum[i] = Result->DiscardIncompletePacketNum[i] + 1;		//用來計算被砍掉不完整的packet數
+					///Result->TransmissionTime[i] = Result->TransmissionTime[i] + (UEList[i].packet_size - Queue->HeadPacketSize[i]) / resource_element * CQIEfficiency(UEList[i].CQI);
+				}					
 
 				Queue->PacketHOLDelay[i].erase(Queue->PacketHOLDelay[i].begin());							//因為packet的HOL delay超過delay budget，所以要砍掉第一個packet
 				Result->DiscardPacketNum[i] = Result->DiscardPacketNum[i] + 1;								//累計discard掉的packet數
-				Result->SystemTime[i] = Result->SystemTime[i] + (t + 1) - Queue->PacketArrivalTime[i][0];	//被discard掉的packet在系統的時間
+				//Result->SystemTime[i] = Result->SystemTime[i] + (t + 1) - Queue->PacketArrivalTime[i][0];	//被discard掉的packet在系統的時間
 				Queue->PacketArrivalTime[i].erase(Queue->PacketArrivalTime[i].begin());						//也刪掉它在PacketArrivalTime裡記錄的arrival time
 				if (Queue->PacketHOLDelay[i].empty())
 					break;
@@ -359,6 +362,8 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 {
 	double InstantRate[UEnumber] = { 0.0 };			// 在t時預計可以拿多少rate
 	double Priority = 0.0;							// scheduling時用的priority
+	int NumRBAssigned[UEnumber] = { 0 };
+	double NumBitsTransmited[UEnumber] = { 0 };
 	int AssignedUE = 0;								// 哪個UE獲得了RB
 
 	vector <double> BuffrtPacketArrivalTime;
@@ -404,6 +409,7 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 		if (BuffrtPacketUEOrder.size() == 0)
 			break;
 		AssignedUE = BuffrtPacketUEOrder[i % NumUEHaveBufferPacket];
+		NumRBAssigned[AssignedUE] = NumRBAssigned[AssignedUE] + 1;
 
 		//分配RB給UE
 		double MaxPriority = 0.0;
@@ -421,19 +427,18 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 			if (Queue->HeadPacketSize[AssignedUE] > RBSizeSpace)	//第一個packet size比RB可攜帶的資料量大
 			{
 				Queue->HeadPacketSize[AssignedUE] = Queue->HeadPacketSize[AssignedUE] - RBSizeSpace;
-				Result->SystemTime[AssignedUE] = Result->SystemTime[AssignedUE] + RBSizeSpace / RBCarryBit;
-				Result->TransmissionTime[AssignedUE] = Result->TransmissionTime[AssignedUE] + RBSizeSpace / RBCarryBit;
+				NumBitsTransmited[AssignedUE] += RBCarryBit;
 				RBSizeSpace = 0;
 				RBAssign = 0;
 			}
 			else													//第一個packet size比RB可攜帶的資料量小
 			{
 				RBSizeSpace = RBSizeSpace - Queue->HeadPacketSize[AssignedUE];
+				NumBitsTransmited[AssignedUE] += Queue->HeadPacketSize[AssignedUE];
 				Result->Delay[AssignedUE] = Result->Delay[AssignedUE] + ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);    // 計算每一個packet delay
 				double TransmissionTime = Queue->HeadPacketSize[AssignedUE] / RBCarryBit;					// Debug用
 				double WaitingTime = ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);					// Debug用
-				Result->SystemTime[AssignedUE] = Result->SystemTime[AssignedUE] + ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]) + Queue->HeadPacketSize[AssignedUE] / RBCarryBit;		// 計算傳送到UE的時間
-				Result->TransmissionTime[AssignedUE] = Result->TransmissionTime[AssignedUE] + Queue->HeadPacketSize[AssignedUE] / RBCarryBit;
+				Result->SystemTime[AssignedUE] = Result->SystemTime[AssignedUE] + ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);		// 計算傳送到UE的時間
 				Queue->PacketArrivalTime[AssignedUE].erase(Queue->PacketArrivalTime[AssignedUE].begin());
 				BuffrtPacketUEOrder.erase(BuffrtPacketUEOrder.begin() + (i % NumUEHaveBufferPacket));
 				if (Queue->PacketArrivalTime[AssignedUE].size() == 0)					
@@ -448,6 +453,14 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 			}
 		}
 		Result->Throughput[AssignedUE] = Result->Throughput[AssignedUE] + ((RBCarryBit - RBSizeSpace) / 1000000);   // 計算UE的throughput
+	}
+
+	for (int i = 0; i < UEnumber; i++)
+	{
+		if (NumBitsTransmited[i] == 0)
+			continue;
+		Result->TransmissionTime[i] = Result->TransmissionTime[i] + NumBitsTransmited[i] / (resource_element * CQIEfficiency(UEList[i].CQI) * NumRBAssigned[i]);
+		Result->SystemTime[i] = Result->SystemTime[i] + NumBitsTransmited[i] / (resource_element * CQIEfficiency(UEList[i].CQI) * NumRBAssigned[i]);
 	}
 
 	// 計算每個UE在這TTI scheduling後的buffer裡有多少資料量

@@ -3,7 +3,7 @@
 
 //Scenario patameter
 #define power_eNB 46.0			//dBm
-#define radius_eNB 1723			//m
+#define radius_eNB 1732			//m
 #define total_RBG 100			//Number of total RBG (20Mhz=100)
 #define	total_symbol 14			//Number of symbol in a RB (14)
 #define ctrl_symbol 2			//Number of symbol for control signal in a RB (1~3)
@@ -22,7 +22,7 @@
 #define simulation_time 1000000	//ms(TTI
 #define UE_dis_mode 1			//0: uniform 1:hotspot
 #define UE_type_number 3		//DB = 50, 100, 300ms
-#define UEnumber 300
+#define UEnumber 40
 
 #include<vector>
 
