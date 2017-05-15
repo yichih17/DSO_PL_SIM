@@ -1,7 +1,7 @@
 ﻿  Simulation.cpp
-c:\users\214balcn\documents\github\dso_pl_sim\dso_pl_sim\simulation.cpp(300): warning C4018: '<': signed/unsigned mismatch
-c:\users\214balcn\documents\github\dso_pl_sim\dso_pl_sim\simulation.cpp(306): warning C4018: '>': signed/unsigned mismatch
-c:\users\214balcn\documents\github\dso_pl_sim\dso_pl_sim\simulation.cpp(318): warning C4018: '<': signed/unsigned mismatch
-c:\users\214balcn\documents\github\dso_pl_sim\dso_pl_sim\simulation.cpp(369): warning C4018: '<': signed/unsigned mismatch
+c:\users\214balcn\documents\github\dso_pl_sim\dso_pl_sim\simulation.cpp(304): warning C4018: '<': signed/unsigned mismatch
+c:\users\214balcn\documents\github\dso_pl_sim\dso_pl_sim\simulation.cpp(310): warning C4018: '>': signed/unsigned mismatch
+c:\users\214balcn\documents\github\dso_pl_sim\dso_pl_sim\simulation.cpp(322): warning C4018: '<': signed/unsigned mismatch
+c:\users\214balcn\documents\github\dso_pl_sim\dso_pl_sim\simulation.cpp(373): warning C4018: '<': signed/unsigned mismatch
   DSO_PL_SIM.vcxproj -> C:\Users\214balcn\Documents\GitHub\DSO_PL_SIM\Debug\DSO_PL_SIM.exe
   DSO_PL_SIM.vcxproj -> C:\Users\214balcn\Documents\GitHub\DSO_PL_SIM\Debug\DSO_PL_SIM.pdb (Full PDB)

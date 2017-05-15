@@ -6,7 +6,7 @@
 #include<time.h>
 #include<algorithm>
 
-#define outputPAT 1									//1: output PAT to txt file ; 0: store in program memory
+#define outputPAT 0									//1: output PAT to txt file ; 0: store in program memory
 #define outputUEinfo 0								//1: output UE information to txt file ; 0: store in program memory
 
 using namespace std;
@@ -18,6 +18,7 @@ UE UEList[UEnumber];
 int DB50_UEnumber = 0;
 int DB100_UEnumber = 0;
 int DB300_UEnumber = 0;
+vector <double> TempPacketArrivalTime[UEnumber];		//用來暫存UE的packet pattern
 
 double CQIEfficiency(int CQI)
 {
@@ -152,6 +153,7 @@ void Simulation_Result(UE *UEList, SimulationResult *Result)
 
 	// 計算整體的throughput、delay、schedule packet數、discard packet數
 	double DelayTemp = 0.0;
+	double TransmissionTimeTemp = 0.0;
 	double SystemTimeTemp = 0.0;
 	double Type1_DelayTemp = 0.0;
 	double Type2_DelayTemp = 0.0;
@@ -161,11 +163,13 @@ void Simulation_Result(UE *UEList, SimulationResult *Result)
 		Result->TotalThroughput = Result->TotalThroughput + Result->Throughput[i];
 		DelayTemp += Result->Delay[i];
 		SystemTimeTemp += Result->SystemTime[i];
+		TransmissionTimeTemp += Result->TransmissionTime[i];
 		Result->TotalSchedulePacketNum = Result->TotalSchedulePacketNum + Result->SchedulePackerNum[i];
 		Result->TotalDiscardPacketNum = Result->TotalDiscardPacketNum + Result->DiscardPacketNum[i];
 	}
 	Result->AverageThroughput = Result->TotalThroughput / UEnumber;
 	Result->AverageDelay = DelayTemp / Result->TotalSchedulePacketNum;
+	Result->AverageTransmissionTime = TransmissionTimeTemp / Result->TotalSchedulePacketNum;
 	Result->AverageSystemTime = SystemTimeTemp / Result->TotalSchedulePacketNum;
 	Result->PacketLossRatio = ((double)Result->TotalDiscardPacketNum / (double)(Result->TotalSchedulePacketNum + Result->TotalDiscardPacketNum)) * 100;
 
@@ -418,6 +422,7 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 			{
 				Queue->HeadPacketSize[AssignedUE] = Queue->HeadPacketSize[AssignedUE] - RBSizeSpace;
 				Result->SystemTime[AssignedUE] = Result->SystemTime[AssignedUE] + RBSizeSpace / RBCarryBit;
+				Result->TransmissionTime[AssignedUE] = Result->TransmissionTime[AssignedUE] + RBSizeSpace / RBCarryBit;
 				RBSizeSpace = 0;
 				RBAssign = 0;
 			}
@@ -428,6 +433,7 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 				double TransmissionTime = Queue->HeadPacketSize[AssignedUE] / RBCarryBit;					// Debug用
 				double WaitingTime = ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);					// Debug用
 				Result->SystemTime[AssignedUE] = Result->SystemTime[AssignedUE] + ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]) + Queue->HeadPacketSize[AssignedUE] / RBCarryBit;		// 計算傳送到UE的時間
+				Result->TransmissionTime[AssignedUE] = Result->TransmissionTime[AssignedUE] + Queue->HeadPacketSize[AssignedUE] / RBCarryBit;
 				Queue->PacketArrivalTime[AssignedUE].erase(Queue->PacketArrivalTime[AssignedUE].begin());
 				BuffrtPacketUEOrder.erase(BuffrtPacketUEOrder.begin() + (i % NumUEHaveBufferPacket));
 				if (Queue->PacketArrivalTime[AssignedUE].size() == 0)					
@@ -456,149 +462,159 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 
 int main()
 {
-	for (int i = 0; i < UEnumber; i++)
+	for (int times = 0; times < 10; times++)
 	{
-		//Traffic request initial
-		UEList[i].bit_rate = 10;
-		UEList[i].packet_size = 800;
-		if (i < UEnumber *0.33)
+		for (int i = 0; i < UEnumber; i++)
+			TempPacketArrivalTime[i].clear();
+
+		for (int i = 0; i < UEnumber; i++)
 		{
-			DB50_UEnumber++;
-			UEList[i].delay_budget = 50;
-		}
-		else
-		{
-			if (i < UEnumber *0.66)
+			//Traffic request initial
+			UEList[i].bit_rate = 10;
+			UEList[i].packet_size = 800;
+			if (i < UEnumber *0.33)
 			{
-				DB100_UEnumber++;
-				UEList[i].delay_budget = 100;
-			}				
+				DB50_UEnumber++;
+				UEList[i].delay_budget = 50;
+			}
 			else
 			{
-				DB300_UEnumber++;
-				UEList[i].delay_budget = 300;
-			}
-		}			
-		
-		//Coordiante initial
-		uniformdistribution(&UEList[i]);
-
-		//Other calculation
-		UEList[i].CQI = getCQI(&UEList[i]);
-		UEList[i].lambdai = UEList[i].bit_rate / UEList[i].packet_size;
-	}
-
-	//give packet arrival time
-	srand((unsigned)time(NULL));			//亂數種子
-	string FileName;						//檔案名稱
-	fstream WriteFile;						//宣告fstream物件
-	double BufferTimer = 0.0;				//每個UE在eNB裡對應buffer的時間軸
-	double InterArrivalTime = 0.0;			//packet的inter-arrival time
-	int AcrossTTI = 0;						//用來判斷UE的時間軸，packet的inter-arrival time有無跨過此TTI
-	for (int i = 0; i < UEnumber; i++)
-	{
-		//cout << "UE" << i << endl;
-		BufferTimer = 0.0;
-		AcrossTTI = 0;
-		string UEIndex = IntToString(i);
-		FileName = "UE" + UEIndex + "_PAT.txt";				//PAT=packet arrival time
-		WriteFile.open(FileName, ios::out | ios::trunc);	//記錄每個UE的PAT
-		if (WriteFile.fail())
-			cout << "檔案無法開啟" << endl;
-		else
-		{
-			for (int t = 0; t < simulation_time; t++)
-			{
-				int TTIPacketCount = 0;
-				//計算每個packet的到來時間點，並記錄此時TTI每個UE的buffer量
-				while (BufferTimer <= t + 1)				//用來計算此TTI來了幾個packet和此TTI結束時目前buffer裡的資料量
+				if (i < UEnumber *0.66)
 				{
-					WriteFile.setf(ios::fixed, ios::floatfield);
-					WriteFile.precision(3);
-					if (AcrossTTI)							//AcrossTTI = 1為inter arrival time有跨過此TTI; AcrossTTI=0為無
+					DB100_UEnumber++;
+					UEList[i].delay_budget = 100;
+				}
+				else
+				{
+					DB300_UEnumber++;
+					UEList[i].delay_budget = 300;
+				}
+			}
+
+			//Coordiante initial
+			uniformdistribution(&UEList[i]);
+
+			//Other calculation
+			UEList[i].CQI = getCQI(&UEList[i]);
+			UEList[i].lambdai = UEList[i].bit_rate / UEList[i].packet_size;
+		}
+
+		//give packet arrival time
+		srand((unsigned)time(NULL));			//亂數種子
+		string FileName;						//檔案名稱
+		fstream WriteFile;						//宣告fstream物件
+		double BufferTimer = 0.0;				//每個UE在eNB裡對應buffer的時間軸
+		double InterArrivalTime = 0.0;			//packet的inter-arrival time
+		int AcrossTTI = 0;						//用來判斷UE的時間軸，packet的inter-arrival time有無跨過此TTI
+		for (int i = 0; i < UEnumber; i++)
+		{
+			//cout << "UE" << i << endl;
+			BufferTimer = 0.0;
+			AcrossTTI = 0;
+			string UEIndex = IntToString(i);
+			FileName = "UE" + UEIndex + "_PAT.txt";				//PAT=packet arrival time
+			WriteFile.open(FileName, ios::out | ios::trunc);	//記錄每個UE的PAT
+			if (WriteFile.fail())
+				cout << "檔案無法開啟" << endl;
+			else
+			{
+				for (int t = 0; t < simulation_time; t++)
+				{
+					int TTIPacketCount = 0;
+					//計算每個packet的到來時間點，並記錄此時TTI每個UE的buffer量
+					while (BufferTimer <= t + 1)				//用來計算此TTI來了幾個packet和此TTI結束時目前buffer裡的資料量
 					{
-						if (outputPAT == 1)
-							WriteFile << BufferTimer << endl;	//記錄每個packet的arrival time
-						//TTIPacketCount++;
-					}						
-					else
-					{
-						InterArrivalTime = exponentially_Distributed(UEList[i].lambdai);//亂數產生inter-arrival time
-						BufferTimer = BufferTimer + InterArrivalTime;                   //紀錄每個UE的時間軸
-					}
-					if (BufferTimer > t + 1)				//BufferTimer有無超過目前此TTI
-					{
-						AcrossTTI = 1;
-						break;
-					}
-					else 
-						if (AcrossTTI)
-							AcrossTTI = 0;
-						else
+						WriteFile.setf(ios::fixed, ios::floatfield);
+						WriteFile.precision(3);
+						if (AcrossTTI)							//AcrossTTI = 1為inter arrival time有跨過此TTI; AcrossTTI=0為無
 						{
 							if (outputPAT == 1)
-								WriteFile << BufferTimer << endl;	// 記錄每個packet的arrival time
+								WriteFile << BufferTimer << endl;	//記錄每個packet的arrival time
+							else
+								TempPacketArrivalTime[i].push_back(BufferTimer);
 							//TTIPacketCount++;
-						}						
-					//cout << "Packet arrival time：" << BufferTimer << endl;
+						}
+						else
+						{
+							InterArrivalTime = exponentially_Distributed(UEList[i].lambdai);//亂數產生inter-arrival time
+							BufferTimer = BufferTimer + InterArrivalTime;                   //紀錄每個UE的時間軸
+						}
+						if (BufferTimer > t + 1)				//BufferTimer有無超過目前此TTI
+						{
+							AcrossTTI = 1;
+							break;
+						}
+						else
+							if (AcrossTTI)
+								AcrossTTI = 0;
+							else
+							{
+								if (outputPAT == 1)
+									WriteFile << BufferTimer << endl;	// 記錄每個packet的arrival time
+								else
+									TempPacketArrivalTime[i].push_back(BufferTimer);
+								//TTIPacketCount++;
+							}
+						//cout << "Packet arrival time：" << BufferTimer << endl;
+					}
+					//cout << "第" << t+1 << "個TTI的Packet數：" << TTIPacketCount << endl;
 				}
-				//cout << "第" << t+1 << "個TTI的Packet數：" << TTIPacketCount << endl;
 			}
+			WriteFile.close();
 		}
-		WriteFile.close();
-	}
-	cout << "Give PAT end." << endl;
+		cout << "Give PAT end." << endl;
 
-	//讀取所有UE的PAT先暫存起來
-	string UEPacketPatternFileName;						//UE packet pattern的檔案名稱
-	fstream ReadUEPAT;									//宣告fstream物件
-	char UEPacketArrivalTime[200];						//用來佔存txt每一行的資料
-	double ArrivalTime = 0.0;							//用來佔存抓出來每一行的資料
-	vector <double> TempPacketArrivalTime[UEnumber];		//用來暫存UE的packet pattern
-	int NumUETemp = UEnumber;
-	string NumUEIndex = IntToString(NumUETemp);
-	for (int i = 0; i < UEnumber; i++)
-	{
-		string UEIndex = IntToString(i);
-		UEPacketPatternFileName = "UE" + UEIndex + "_PAT.txt";
-		ReadUEPAT.open(UEPacketPatternFileName, ios::in);
-		if (!ReadUEPAT)
-			cout << "檔案無法開啟" << endl;
-		else
+		//讀取所有UE的PAT先暫存起來
+		string UEPacketPatternFileName;						//UE packet pattern的檔案名稱
+		fstream ReadUEPAT;									//宣告fstream物件
+		char UEPacketArrivalTime[200];						//用來佔存txt每一行的資料
+		double ArrivalTime = 0.0;							//用來佔存抓出來每一行的資料
+		int NumUETemp = UEnumber;
+		string NumUEIndex = IntToString(NumUETemp);
+		for (int i = 0; i < UEnumber; i++)
 		{
-			while (ReadUEPAT >> UEPacketArrivalTime)
+			string UEIndex = IntToString(i);
+			UEPacketPatternFileName = "UE" + UEIndex + "_PAT.txt";
+			ReadUEPAT.open(UEPacketPatternFileName, ios::in);
+			if (!ReadUEPAT)
+				cout << "檔案無法開啟" << endl;
+			else
 			{
-				ArrivalTime = atof(UEPacketArrivalTime);
-				TempPacketArrivalTime[i].push_back(ArrivalTime);
+				while (ReadUEPAT >> UEPacketArrivalTime)
+				{
+					ArrivalTime = atof(UEPacketArrivalTime);
+					TempPacketArrivalTime[i].push_back(ArrivalTime);
+				}
 			}
+			ReadUEPAT.close();
 		}
-		ReadUEPAT.close();
+
+		//Simulation start
+		BufferStatus EqualRB_Buffer;
+		SimulationResult EqualRB_Result;
+		for (int i = 0; i < UEnumber; i++)
+		{
+			EqualRB_Buffer.PacketArrivalTime[i].clear();
+			EqualRB_Buffer.PacketHOLDelay[i].clear();
+			EqualRB_Buffer.HeadPacketSize[i] = UEList[i].packet_size;
+		}
+
+		for (int t = 0; t < simulation_time; t++)
+		{
+			double processing = 0;
+			processing = (double)t / (double)simulation_time * 100;
+
+			if (t % (simulation_time / 20) == 0)
+				cout << (double)t / (double)simulation_time * 100 << "%" << endl;
+			Buffer_Status(t, &EqualRB_Buffer, UEList, TempPacketArrivalTime, &EqualRB_Result);
+			EqualRB(t, &EqualRB_Buffer, UEList, &EqualRB_Result);
+		}
+
+		Simulation_Result(UEList, &EqualRB_Result);
+
+		//Debug
+		//for (int i = 0; i < UEnumber; i++)
+		//	cout << UEList[i].bit_rate << " " << UEList[i].packet_size << " " << UEList[i].delay_budget << " " << UEList[i].coor_X << " " << UEList[i].coor_Y << " " << UEList[i].CQI << endl;
 	}
-
-	//Simulation start
-	BufferStatus EqualRB_Buffer;
-	SimulationResult EqualRB_Result;
-	for (int i = 0; i < UEnumber; i++)
-	{
-		EqualRB_Buffer.PacketArrivalTime[i].clear();
-		EqualRB_Buffer.PacketHOLDelay[i].clear();
-		EqualRB_Buffer.HeadPacketSize[i] = UEList[i].packet_size;
-	}
-
-	for (int t = 0; t < simulation_time; t++)
-	{
-		double processing = 0;
-		processing = (double)t / (double)simulation_time * 100;
-
-		if (t % (simulation_time/100) == 0)
-			cout << (double)t / (double)simulation_time * 100 << "%" << endl;
-		Buffer_Status(t, &EqualRB_Buffer, UEList, TempPacketArrivalTime, &EqualRB_Result);
-		EqualRB(t, &EqualRB_Buffer, UEList, &EqualRB_Result);
-	}
-
-	Simulation_Result(UEList, &EqualRB_Result);
-
-	//Debug
-	//for (int i = 0; i < UEnumber; i++)
-	//	cout << UEList[i].bit_rate << " " << UEList[i].packet_size << " " << UEList[i].delay_budget << " " << UEList[i].coor_X << " " << UEList[i].coor_Y << " " << UEList[i].CQI << endl;
+	
 }

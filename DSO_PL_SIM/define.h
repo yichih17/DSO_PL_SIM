@@ -22,7 +22,7 @@
 #define simulation_time 1000000	//ms(TTI
 #define UE_dis_mode 1			//0: uniform 1:hotspot
 #define UE_type_number 3		//DB = 50, 100, 300ms
-#define UEnumber 50
+#define UEnumber 10
 
 #include<vector>
 
@@ -119,6 +119,7 @@ public:
 	double Throughput[UEnumber];					// 每個UE的throughput
 	double Delay[UEnumber];							// 每個UE的封包在buffer裡等待的時間
 	double SystemTime[UEnumber];					// 每個UE的封包從進入buffer到傳送完成的時間
+	double TransmissionTime[UEnumber];
 	double RateSatisfaction[UEnumber];				// 每個UE的rate satisfaction
 	double DelaySatisfaction[UEnumber];				// 每個UE的delay satisfaction
 	double AvgSystemTime;						// Queueing算出來的
@@ -128,7 +129,8 @@ public:
 	int TotalDiscardPacketNum;					// 用來記錄整體系統砍多少packet
 	double AverageThroughput;					// 用來記錄所有UE的平均throughput
 	double AverageDelay;						// 用來記錄所有UE的平均delay
-	double AverageSystemTime;					// 用來記錄所有UE的平均delay
+	double AverageTransmissionTime;
+	double AverageSystemTime;					
 	double PacketLossRatio;						// 用來記錄整體系統的packet loss ratio	
 	double Type1_TotalThroughput;				// 用來記錄type1 UE的throughput
 	int Type1_SchedulePacketNum;				// 用來記錄type1 UE排程多少packet
@@ -165,6 +167,7 @@ public:
 		memset(Throughput, 0, sizeof(Throughput));
 		memset(Delay, 0, sizeof(Delay));
 		memset(SystemTime, 0, sizeof(SystemTime));
+		memset(TransmissionTime, 0, sizeof(TransmissionTime));
 		memset(RateSatisfaction, 0, sizeof(RateSatisfaction));
 		memset(DelaySatisfaction, 0, sizeof(DelaySatisfaction));
 		AvgSystemTime = 0.0;
@@ -174,6 +177,7 @@ public:
 		TotalDiscardPacketNum = 0;
 		AverageThroughput = 0.0;
 		AverageDelay = 0.0;
+		AverageTransmissionTime = 0.0;
 		AverageSystemTime = 0.0;
 		PacketLossRatio = 0.0;
 		Type1_TotalThroughput = 0.0;
