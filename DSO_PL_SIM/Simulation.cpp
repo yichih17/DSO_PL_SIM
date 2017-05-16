@@ -358,6 +358,8 @@ void Buffer_Status(int t, BufferStatus *Queue, UE *UEList, vector <double> *Temp
 	}
 }
 
+bool pk_cp(Packet a, Packet b) { return a.ArrivalTime < b.ArrivalTime; }
+
 void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 {
 	double InstantRate[UEnumber] = { 0.0 };			// 在t時預計可以拿多少rate
@@ -366,49 +368,30 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 	double NumBitsTransmited[UEnumber] = { 0 };
 	int AssignedUE = 0;								// 哪個UE獲得了RB
 
-	vector <double> BuffrtPacketArrivalTime;
-	vector <int> BuffrtPacketUEOrder;
-	int NumUEHaveBufferPacket = 0;					//這個TTI有封包要傳送的UE個數
-	int NumBufferPacket = 0;
+	//vector <double> BuffrtPacketArrivalTime;
+	//vector <int> BuffrtPacketUEOrder;
+	vector <Packet> ScheduleUE;
+	//int NumUEHaveBufferPacket = 0;					//這個TTI有封包要傳送的UE個數
+	//int NumBufferPacket = 0;
 	for (int j = 0; j < UEnumber; j++)
 	{
 		if (Queue->PacketArrivalTime[j].size() != 0)
 		{
-			NumUEHaveBufferPacket++;
-			for (int k = 0; k < Queue->PacketArrivalTime[j].size(); k++)
-			{
-				BuffrtPacketArrivalTime.push_back(Queue->PacketArrivalTime[j][k]);
-				BuffrtPacketUEOrder.push_back(j);
-				NumBufferPacket++;
-			}
+			Packet temp(j, Queue->PacketArrivalTime[j][0]);
+			ScheduleUE.push_back(temp);
 		}
 	}
-	if (BuffrtPacketArrivalTime.size() == 0)
+	if (ScheduleUE.size() == 0)
 		return;
 
-	//Bubble Sort排序Arrival time先後
-	for (int j = BuffrtPacketArrivalTime.size() - 1; j > 0; j--)
-		for (int k = 0; k < j; k++)
-		{
-			if (BuffrtPacketArrivalTime[k] > BuffrtPacketArrivalTime[k + 1])
-			{
-				double tempT;
-				tempT = BuffrtPacketArrivalTime[k];
-				BuffrtPacketArrivalTime[k] = BuffrtPacketArrivalTime[k + 1];
-				BuffrtPacketArrivalTime[k + 1] = tempT;
-				int tempI;
-				tempI = BuffrtPacketUEOrder[k];
-				BuffrtPacketUEOrder[k] = BuffrtPacketUEOrder[k + 1];
-				BuffrtPacketUEOrder[k + 1] = tempI;
-			}
-		}
+	sort(ScheduleUE.begin(), ScheduleUE.end(), pk_cp);
 
 	// 開始競標RB看要分配給哪個UE
 	for (int i = 0; i < total_RBG; i++)
 	{
-		if (BuffrtPacketUEOrder.size() == 0)
-			break;
-		AssignedUE = BuffrtPacketUEOrder[i % NumUEHaveBufferPacket];
+		if (ScheduleUE.size() == 0)
+			return;
+		AssignedUE = ScheduleUE[i % ScheduleUE.size()].belongUE;
 		NumRBAssigned[AssignedUE] = NumRBAssigned[AssignedUE] + 1;
 
 		//分配RB給UE
@@ -436,15 +419,13 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 				RBSizeSpace = RBSizeSpace - Queue->HeadPacketSize[AssignedUE];
 				NumBitsTransmited[AssignedUE] += Queue->HeadPacketSize[AssignedUE];
 				Result->Delay[AssignedUE] = Result->Delay[AssignedUE] + ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);    // 計算每一個packet delay
-				double TransmissionTime = Queue->HeadPacketSize[AssignedUE] / RBCarryBit;					// Debug用
-				double WaitingTime = ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);					// Debug用
+				//double WaitingTime = ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);					// Debug用
 				Result->SystemTime[AssignedUE] = Result->SystemTime[AssignedUE] + ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);		// 計算傳送到UE的時間
 				Queue->PacketArrivalTime[AssignedUE].erase(Queue->PacketArrivalTime[AssignedUE].begin());
-				BuffrtPacketUEOrder.erase(BuffrtPacketUEOrder.begin() + (i % NumUEHaveBufferPacket));
-				if (Queue->PacketArrivalTime[AssignedUE].size() == 0)					
-					NumUEHaveBufferPacket--;
-				if (NumUEHaveBufferPacket == 0 && BuffrtPacketUEOrder.size() != 0)
-					cout << "stop" << endl;
+				if (Queue->PacketArrivalTime[AssignedUE].size() == 0)
+					ScheduleUE.erase(ScheduleUE.begin() + i % ScheduleUE.size());
+				//if (NumUEHaveBufferPacket == 0 && BuffrtPacketUEOrder.size() != 0)
+				//	cout << "stop" << endl;
 				Result->SchedulePackerNum[AssignedUE] = Result->SchedulePackerNum[AssignedUE] + 1;
 				Queue->PacketHOLDelay[AssignedUE].erase(Queue->PacketHOLDelay[AssignedUE].begin());
 				if (Queue->PacketArrivalTime[AssignedUE].empty())
@@ -483,8 +464,8 @@ int main()
 		for (int i = 0; i < UEnumber; i++)
 		{
 			//Traffic request initial
-			UEList[i].bit_rate = 10;
-			UEList[i].packet_size = 800;
+			UEList[i].bit_rate = 300;
+			UEList[i].packet_size = 8000;
 			if (i < UEnumber *0.33)
 			{
 				DB50_UEnumber++;
@@ -659,7 +640,7 @@ int main()
 			double processing = 0;
 			processing = (double)t / (double)simulation_time * 100;
 
-			if (t % (simulation_time / 20) == 0)
+			if (t % (simulation_time / 25) == 0)
 				cout << (double)t / (double)simulation_time * 100 << "%" << endl;
 			Buffer_Status(t, &EqualRB_Buffer, UEList, TempPacketArrivalTime, &EqualRB_Result);
 			EqualRB(t, &EqualRB_Buffer, UEList, &EqualRB_Result);
