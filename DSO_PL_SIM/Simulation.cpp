@@ -128,25 +128,16 @@ void Simulation_Result(UE *UEList, SimulationResult *Result)
 	double AvgSystemTime = 0.0;
 	double Xj = 0.0;
 	double Xj2 = 0.0;
-	double Xj_paper = 0.0;
-	double Xj2_paper = 0.0;
 	double lambda = 0.0;
 	for (int i = 0; i < UEnumber; i++)
 		lambda = lambda + UEList[i].lambdai;
 	for (int i = 0; i < UEnumber; i++)
 	{
 		double weight_i = UEList[i].lambdai / lambda;
-
 		double Xij = UEList[i].packet_size / (resource_element * CQIEfficiency(UEList[i].CQI) * total_RBG);
 		Xj = Xj + Xij * weight_i;
 		Xj2 = Xj2 + pow(Xij, 2) * weight_i;
-
-		double Xij_paper = UEList[i].packet_size / (resource_element * CQIEfficiency(UEList[i].CQI) * total_RBG / UEnumber);
-		Xj_paper = Xj_paper + Xij_paper * weight_i;
-		Xj2_paper = Xj2_paper + pow(Xij_paper, 2) * weight_i;
 	}
-	//double rho = lambda * Xj;
-	Result->AvgSystemTime_paper = Xj_paper + lambda * Xj2_paper / (1 - lambda * Xj_paper);
 	double rho = lambda * Xj;
 	double right = lambda * Xj2 / (1 - lambda * Xj);
 	Result->AvgSystemTime = Xj + lambda * Xj2 / (1 - lambda * Xj);
@@ -160,7 +151,7 @@ void Simulation_Result(UE *UEList, SimulationResult *Result)
 	double Type3_DelayTemp = 0.0;
 	for (int i = 0; i<UEnumber; i++)
 	{
-		Result->TotalThroughput = Result->TotalThroughput + Result->Throughput[i];
+		Result->TotalThroughput += (Result->Throughput[i] / 1000000);			//(Kbps)
 		DelayTemp += Result->Delay[i];
 		SystemTimeTemp += Result->SystemTime[i];
 		TransmissionTimeTemp += Result->TransmissionTime[i];
@@ -249,7 +240,7 @@ void OutputResult(string Scheme, SimulationResult *Result)
 	else
 	{
 		//Write_SimulationResultFile << Scheme << " ";
-		Write_SimulationResultFile << (Result->TotalThroughput * 1000 / simulation_time) * 1000 << " " << Result->AverageSystemTime << " " << Result->AvgSystemTime << " " << Result->AvgSystemTime_paper << endl;
+		Write_SimulationResultFile << (Result->TotalThroughput * 1000 / simulation_time) * 1000 << " " << Result->AverageSystemTime << " " << Result->AvgSystemTime << endl;
 		//Write_SimulationResultFile << (Result->AverageThroughput * 1000 / TTI) * 1000 << endl;
 		//Write_SimulationResultFile << Result->AverageDelay << endl;
 		//Write_SimulationResultFile << Result->PacketLossRatio << endl;
@@ -307,6 +298,7 @@ void Buffer_Status(int t, BufferStatus *Queue, UE *UEList, vector <double> *Temp
 			{
 				Queue->PacketArrivalTime[i].push_back(TempPacketArrivalTime[i][TempPacketArrivalTimeID]);
 				TempPacketArrivalTimeID += 1;
+				TTIPacketCount[i] = TTIPacketCount[i] + 1;             // 累計此TTI的packet數
 				if (TempPacketArrivalTime[i].empty() || TempPacketArrivalTimeID > TempPacketArrivalTime[i].size() - 1)
 					break;
 			}
@@ -316,63 +308,66 @@ void Buffer_Status(int t, BufferStatus *Queue, UE *UEList, vector <double> *Temp
 	}
 	
 	// 計算此時TTI每個UE的buffer裡每個packet的HOL delay
-	for (int i = 0; i<UEnumber; i++)
-	{
-		Queue->PacketHOLDelay[i].clear();
-		for (int j = 0; j < Queue->PacketArrivalTime[i].size(); j++)
-			Queue->PacketHOLDelay[i].push_back((t + 1) - Queue->PacketArrivalTime[i][j]);
-	}
+	//for (int i = 0; i<UEnumber; i++)
+	//{
+	//	Queue->PacketHOLDelay[i].clear();
+	//	for (int j = 0; j < Queue->PacketArrivalTime[i].size(); j++)
+	//		Queue->PacketHOLDelay[i].push_back((t + 1) - Queue->PacketArrivalTime[i][j]);
+	//}
 
 	// 處理HOL delay是否超過delay budget，超過的packet要discard掉
-	for (int i = 0; i<UEnumber; i++)
-	{
-		//cout << PacketHOLDelay[i].size() << endl;
+	//for (int i = 0; i<UEnumber; i++)
+	//{
+	//	//cout << PacketHOLDelay[i].size() << endl;
 
-		if (!Queue->PacketHOLDelay[i].empty())									//先檢查buffer裡是否有packet要check其HOL delay有無超過budget
-			while (Queue->PacketHOLDelay[i][0] > UEList[i].delay_budget)		//packet的HOL delay是否超過delay budget
-			{
-				//cout << PacketHOLDelay[i][0] << endl;
-				if (Queue->HeadPacketSize[i] < UEList[i].packet_size)
-				{
-					Result->DiscardIncompletePacketNum[i] = Result->DiscardIncompletePacketNum[i] + 1;		//用來計算被砍掉不完整的packet數
-					///Result->TransmissionTime[i] = Result->TransmissionTime[i] + (UEList[i].packet_size - Queue->HeadPacketSize[i]) / resource_element * CQIEfficiency(UEList[i].CQI);
-				}					
+	//	if (!Queue->PacketHOLDelay[i].empty())									//先檢查buffer裡是否有packet要check其HOL delay有無超過budget
+	//		while (Queue->PacketHOLDelay[i][0] > UEList[i].delay_budget)			//packet的HOL delay是否超過delay budget
+	//		{
+	//			//cout << PacketHOLDelay[i][0] << endl;
+	//			if (Queue->HeadPacketSize[i] < UEList[i].packet_size)
+	//			{
+	//				Result->DiscardIncompletePacketNum[i] = Result->DiscardIncompletePacketNum[i] + 1;		//用來計算被砍掉不完整的packet數
+	//				///Result->TransmissionTime[i] = Result->TransmissionTime[i] + (UEList[i].packet_size - Queue->HeadPacketSize[i]) / resource_element * CQIEfficiency(UEList[i].CQI);
+	//			}					
 
-				Queue->PacketHOLDelay[i].erase(Queue->PacketHOLDelay[i].begin());							//因為packet的HOL delay超過delay budget，所以要砍掉第一個packet
-				Result->DiscardPacketNum[i] = Result->DiscardPacketNum[i] + 1;								//累計discard掉的packet數
-				//Result->SystemTime[i] = Result->SystemTime[i] + (t + 1) - Queue->PacketArrivalTime[i][0];	//被discard掉的packet在系統的時間
-				Queue->PacketArrivalTime[i].erase(Queue->PacketArrivalTime[i].begin());						//也刪掉它在PacketArrivalTime裡記錄的arrival time
-				if (Queue->PacketHOLDelay[i].empty())
-					break;
-			}
-		if (!Queue->PacketArrivalTime[i].empty())          // 計算每個UE在packet discard掉後的buffer裡有多少資料量
-		{
-			Queue->Buffer[i] = (Queue->PacketArrivalTime[i].size() - 1) * UEList[i].packet_size + Queue->HeadPacketSize[i];
-			Queue->BeforeScheduleBuffer[i] = Queue->Buffer[i];
-		}
-		else
-		{
-			Queue->Buffer[i] = 0.0;
-			Queue->BeforeScheduleBuffer[i] = Queue->Buffer[i];
-		}
-	}
+	//			Queue->PacketHOLDelay[i].erase(Queue->PacketHOLDelay[i].begin());							//因為packet的HOL delay超過delay budget，所以要砍掉第一個packet
+	//			Result->DiscardPacketNum[i] = Result->DiscardPacketNum[i] + 1;								//累計discard掉的packet數
+	//			//Result->SystemTime[i] = Result->SystemTime[i] + (t + 1) - Queue->PacketArrivalTime[i][0];	//被discard掉的packet在系統的時間
+	//			Queue->PacketArrivalTime[i].erase(Queue->PacketArrivalTime[i].begin());						//也刪掉它在PacketArrivalTime裡記錄的arrival time
+	//			if (Queue->PacketHOLDelay[i].empty())
+	//				break;
+	//		}
+
+	//	if (!Queue->PacketArrivalTime[i].empty())									// 計算每個UE在packet discard掉後的buffer裡有多少資料量
+	//	{
+	//		Queue->Buffer[i] = (Queue->PacketArrivalTime[i].size() - 1) * UEList[i].packet_size + Queue->HeadPacketSize[i];
+	//		Queue->BeforeScheduleBuffer[i] = Queue->Buffer[i];
+	//	}
+	//	else
+	//	{
+	//		Queue->Buffer[i] = 0.0;
+	//		Queue->BeforeScheduleBuffer[i] = Queue->Buffer[i];
+	//	}
+	//}
 }
 
-bool pk_cp(Packet a, Packet b) { return a.ArrivalTime < b.ArrivalTime; }
+bool CP_PacketArrivalTime(Packet a, Packet b) { return a.ArrivalTime < b.ArrivalTime; }
 
 void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 {
-	double InstantRate[UEnumber] = { 0.0 };			// 在t時預計可以拿多少rate
-	double Priority = 0.0;							// scheduling時用的priority
 	int NumRBAssigned[UEnumber] = { 0 };
 	double NumBitsTransmited[UEnumber] = { 0 };
 	int AssignedUE = 0;								// 哪個UE獲得了RB
 
 	//vector <double> BuffrtPacketArrivalTime;
 	//vector <int> BuffrtPacketUEOrder;
+
+	// 紀錄要競爭RB的UE資訊 (UE編號、Arrival time of HOL packet)
 	vector <Packet> ScheduleUE;
-	//int NumUEHaveBufferPacket = 0;					//這個TTI有封包要傳送的UE個數
+
+	//int NumUEHaveBufferPacket = 0;				//這個TTI有封包要傳送的UE個數
 	//int NumBufferPacket = 0;
+
 	for (int j = 0; j < UEnumber; j++)
 	{
 		if (Queue->PacketArrivalTime[j].size() != 0)
@@ -384,74 +379,70 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 	if (ScheduleUE.size() == 0)
 		return;
 
-	sort(ScheduleUE.begin(), ScheduleUE.end(), pk_cp);
+	sort(ScheduleUE.begin(), ScheduleUE.end(), CP_PacketArrivalTime);	//依照HOL Packet Arrival Time從先到後排序
 
 	// 開始競標RB看要分配給哪個UE
 	for (int i = 0; i < total_RBG; i++)
 	{
 		if (ScheduleUE.size() == 0)
 			return;
-		AssignedUE = ScheduleUE[i % ScheduleUE.size()].belongUE;
-		NumRBAssigned[AssignedUE] = NumRBAssigned[AssignedUE] + 1;
 
-		//分配RB給UE
-		double MaxPriority = 0.0;
-		int CQI = 0;
-		double RBCarryBit = 0.0;
-		CQI = UE[AssignedUE].CQI;
-		RBCarryBit = resource_element * CQIEfficiency(CQI);			//對於獲得這個RB的UE，RB可攜帶多少資料量
+		//分配RBi給UE
+		AssignedUE = ScheduleUE[i % ScheduleUE.size()].belongUE;
+		NumRBAssigned[AssignedUE] += 1;
+		double RBCarryBit = resource_element * CQIEfficiency(UE[AssignedUE].CQI);		//對於獲得這個RB的UE，RB可攜帶多少資料量
 
 		//開始把資料從UE的buffer裡裝進RB裡
-		double RBSizeSpace = 0.0;
-		int RBAssign = 1;
-		RBSizeSpace = RBCarryBit;
+		double RBSizeSpace = RBCarryBit;
+		int RBAssign = 1;		
 		while (RBAssign)
 		{
-			if (Queue->HeadPacketSize[AssignedUE] > RBSizeSpace)	//第一個packet size比RB可攜帶的資料量大
+			//第一個packet size比RB可攜帶的資料量大
+			if (Queue->HeadPacketSize[AssignedUE] > RBSizeSpace)
 			{
-				Queue->HeadPacketSize[AssignedUE] = Queue->HeadPacketSize[AssignedUE] - RBSizeSpace;
-				NumBitsTransmited[AssignedUE] += RBCarryBit;
+				Queue->HeadPacketSize[AssignedUE] -= RBSizeSpace;
 				RBSizeSpace = 0;
 				RBAssign = 0;
 			}
-			else													//第一個packet size比RB可攜帶的資料量小
+			//第一個packet size比RB可攜帶的資料量小
+			else
 			{
-				RBSizeSpace = RBSizeSpace - Queue->HeadPacketSize[AssignedUE];
-				NumBitsTransmited[AssignedUE] += Queue->HeadPacketSize[AssignedUE];
-				Result->Delay[AssignedUE] = Result->Delay[AssignedUE] + ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);    // 計算每一個packet delay
-				//double WaitingTime = ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);					// Debug用
-				Result->SystemTime[AssignedUE] = Result->SystemTime[AssignedUE] + ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);		// 計算傳送到UE的時間
-				Queue->PacketArrivalTime[AssignedUE].erase(Queue->PacketArrivalTime[AssignedUE].begin());
-				if (Queue->PacketArrivalTime[AssignedUE].size() == 0)
-					ScheduleUE.erase(ScheduleUE.begin() + i % ScheduleUE.size());
-				//if (NumUEHaveBufferPacket == 0 && BuffrtPacketUEOrder.size() != 0)
-				//	cout << "stop" << endl;
+				RBSizeSpace -= Queue->HeadPacketSize[AssignedUE];
+				Result->Delay[AssignedUE] += ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);			// 計算每一個packet delay
+//				double WaitingTime = ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);					///在Queue裡等待的時間 (= Delay)
+				Result->SystemTime[AssignedUE] += ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);		// 計算傳送到UE的時間
 				Result->SchedulePackerNum[AssignedUE] = Result->SchedulePackerNum[AssignedUE] + 1;
-				Queue->PacketHOLDelay[AssignedUE].erase(Queue->PacketHOLDelay[AssignedUE].begin());
-				if (Queue->PacketArrivalTime[AssignedUE].empty())
-					RBAssign = 0;
+				Queue->PacketArrivalTime[AssignedUE].erase(Queue->PacketArrivalTime[AssignedUE].begin());
+//				Queue->PacketHOLDelay[AssignedUE].erase(Queue->PacketHOLDelay[AssignedUE].begin());
+				if (Queue->PacketArrivalTime[AssignedUE].size() == 0)										// 如果沒有資料要傳送就退出競爭
+					ScheduleUE.erase(ScheduleUE.begin() + (i % ScheduleUE.size()));				
+				if (Queue->PacketArrivalTime[AssignedUE].empty())											// 如果RBAssign=1, 表示還有其他資料要傳，所以在跑一次迴圈，嘗試塞滿這個RB
+					RBAssign = 0;																			// 這個RB如果裝不滿也不能給別人用，所以如果沒有資料要傳就結束這個RB的裝箱
 				Queue->HeadPacketSize[AssignedUE] = UE[AssignedUE].packet_size;
 			}
 		}
-		Result->Throughput[AssignedUE] = Result->Throughput[AssignedUE] + ((RBCarryBit - RBSizeSpace) / 1000000);   // 計算UE的throughput
+		NumBitsTransmited[AssignedUE] += (RBCarryBit - RBSizeSpace);	// 累計在這個TTI送的資料量
+		Result->Throughput[AssignedUE] += (RBCarryBit - RBSizeSpace);   // 累計UE的throughput
 	}
 
+	// 清算在這個TTI總共的時間花費
 	for (int i = 0; i < UEnumber; i++)
 	{
 		if (NumBitsTransmited[i] == 0)
 			continue;
-		Result->TransmissionTime[i] = Result->TransmissionTime[i] + NumBitsTransmited[i] / (resource_element * CQIEfficiency(UEList[i].CQI) * NumRBAssigned[i]);
-		Result->SystemTime[i] = Result->SystemTime[i] + NumBitsTransmited[i] / (resource_element * CQIEfficiency(UEList[i].CQI) * NumRBAssigned[i]);
+		double capacity = resource_element * CQIEfficiency(UEList[i].CQI) * NumRBAssigned[i];
+		Result->TransmissionTime[i] += (NumBitsTransmited[i] / capacity);
+		Result->SystemTime[i] += (NumBitsTransmited[i] / capacity);
 	}
 
 	// 計算每個UE在這TTI scheduling後的buffer裡有多少資料量
-	for (int i = 0; i<UEnumber; i++)
-	{
-		if (!Queue->PacketArrivalTime[i].empty())
-			Queue->Buffer[i] = (Queue->PacketArrivalTime[i].size() - 1) * UE[i].packet_size + Queue->HeadPacketSize[i];
-		else
-			Queue->Buffer[i] = 0;
-	}
+	//for (int i = 0; i<UEnumber; i++)
+	//{
+	//	if (!Queue->PacketArrivalTime[i].empty())
+	//		Queue->Buffer[i] = (Queue->PacketArrivalTime[i].size() - 1) * UE[i].packet_size + Queue->HeadPacketSize[i];
+	//	else
+	//		Queue->Buffer[i] = 0;
+	//}
 }
 
 int main()
@@ -495,8 +486,6 @@ int main()
 
 		//give packet arrival time
 		srand((unsigned)time(NULL));			//亂數種子
-		string FileName;						//檔案名稱
-		fstream WriteFile;						//宣告fstream物件
 		double BufferTimer = 0.0;				//每個UE在eNB裡對應buffer的時間軸
 		double InterArrivalTime = 0.0;			//packet的inter-arrival time
 		int AcrossTTI = 0;						//用來判斷UE的時間軸，packet的inter-arrival time有無跨過此TTI
@@ -508,9 +497,14 @@ int main()
 
 			if (outputPAT == 1)
 			{
+				//記錄每個UE的PAT
+				string FileName;									//檔案名稱
 				string UEIndex = IntToString(i);
 				FileName = "UE" + UEIndex + "_PAT.txt";				//PAT=packet arrival time
-				WriteFile.open(FileName, ios::out | ios::trunc);	//記錄每個UE的PAT
+				fstream WriteFile;									//宣告fstream物件
+				WriteFile.setf(ios::fixed, ios::floatfield);
+				WriteFile.precision(3);
+				WriteFile.open(FileName, ios::out | ios::trunc);
 				if (WriteFile.fail())
 					cout << "檔案無法開啟" << endl;
 				else
@@ -518,22 +512,18 @@ int main()
 					for (int t = 0; t < simulation_time; t++)
 					{
 						int TTIPacketCount = 0;
+
 						//計算每個packet的到來時間點，並記錄此時TTI每個UE的buffer量
-						while (BufferTimer <= t + 1)				//用來計算此TTI來了幾個packet和此TTI結束時目前buffer裡的資料量
+						while (BufferTimer <= t + 1)												//用來計算此TTI來了幾個packet和此TTI結束時目前buffer裡的資料量
 						{
-							WriteFile.setf(ios::fixed, ios::floatfield);
-							WriteFile.precision(3);
-							if (AcrossTTI)							//AcrossTTI = 1為inter arrival time有跨過此TTI; AcrossTTI=0為無
-							{
-								WriteFile << BufferTimer << endl;	//記錄每個packet的arrival time
-								//TTIPacketCount++;
-							}
+							if (AcrossTTI)															//AcrossTTI = 1為inter arrival time有跨過此TTI; AcrossTTI=0為無
+								WriteFile << BufferTimer << endl;									//記錄每個packet的arrival time
 							else
 							{
-								InterArrivalTime = exponentially_Distributed(UEList[i].lambdai);//亂數產生inter-arrival time
-								BufferTimer = BufferTimer + InterArrivalTime;                   //紀錄每個UE的時間軸
+								InterArrivalTime = exponentially_Distributed(UEList[i].lambdai);	//亂數產生inter-arrival time
+								BufferTimer = BufferTimer + InterArrivalTime;						//紀錄每個UE的時間軸
 							}
-							if (BufferTimer > t + 1)				//BufferTimer有無超過目前此TTI
+							if (BufferTimer > t + 1)												//BufferTimer有無超過目前此TTI
 							{
 								AcrossTTI = 1;
 								break;
@@ -542,13 +532,9 @@ int main()
 								if (AcrossTTI)
 									AcrossTTI = 0;
 								else
-								{
-									WriteFile << BufferTimer << endl;	// 記錄每個packet的arrival time
-									//TTIPacketCount++;
-								}
+									WriteFile << BufferTimer << endl;								// 記錄每個packet的arrival time
 							//cout << "Packet arrival time：" << BufferTimer << endl;
 						}
-						//cout << "第" << t+1 << "個TTI的Packet數：" << TTIPacketCount << endl;
 					}
 				}
 				WriteFile.close();
@@ -561,13 +547,8 @@ int main()
 					//計算每個packet的到來時間點，並記錄此時TTI每個UE的buffer量
 					while (BufferTimer <= t + 1)												//用來計算此TTI來了幾個packet和此TTI結束時目前buffer裡的資料量
 					{
-						WriteFile.setf(ios::fixed, ios::floatfield);
-						WriteFile.precision(3);
 						if (AcrossTTI)															//AcrossTTI = 1為inter arrival time有跨過此TTI; AcrossTTI=0為無
-						{
 							TempPacketArrivalTime[i].push_back(BufferTimer);					//記錄每個packet的arrival time
-							//TTIPacketCount++;
-						}
 						else
 						{
 							InterArrivalTime = exponentially_Distributed(UEList[i].lambdai);	//亂數產生inter-arrival time
@@ -582,20 +563,15 @@ int main()
 							if (AcrossTTI)
 								AcrossTTI = 0;
 							else
-							{
 								TempPacketArrivalTime[i].push_back(BufferTimer);				//記錄每個packet的arrival time
-								//TTIPacketCount++;
-							}
 						//cout << "Packet arrival time：" << BufferTimer << endl;
 					}
-					//cout << "第" << t+1 << "個TTI的Packet數：" << TTIPacketCount << endl;
 				}
-			}
-			
+			}			
 		}
 		cout << "Give PAT end." << endl;
 
-
+		//從外部讀取PAT
 		if (outputPAT == 1)
 		{
 			//讀取所有UE的PAT先暫存起來
@@ -622,8 +598,7 @@ int main()
 				}
 				ReadUEPAT.close();
 			}
-		}
-		
+		}		
 
 		//Simulation start
 		BufferStatus EqualRB_Buffer;
@@ -637,20 +612,14 @@ int main()
 
 		for (int t = 0; t < simulation_time; t++)
 		{
-			double processing = 0;
-			processing = (double)t / (double)simulation_time * 100;
+			if ((t + 1) % (simulation_time / 20) == 0)
+				cout << (double)(t + 1) / (double)simulation_time * 100 << "%" << endl;
 
-			if (t % (simulation_time / 25) == 0)
-				cout << (double)t / (double)simulation_time * 100 << "%" << endl;
 			Buffer_Status(t, &EqualRB_Buffer, UEList, TempPacketArrivalTime, &EqualRB_Result);
 			EqualRB(t, &EqualRB_Buffer, UEList, &EqualRB_Result);
 		}
 
 		Simulation_Result(UEList, &EqualRB_Result);
-
-		//Debug
-		//for (int i = 0; i < UEnumber; i++)
-		//	cout << UEList[i].bit_rate << " " << UEList[i].packet_size << " " << UEList[i].delay_budget << " " << UEList[i].coor_X << " " << UEList[i].coor_Y << " " << UEList[i].CQI << endl;
 	}
 	
 }

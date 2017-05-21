@@ -22,7 +22,7 @@
 #define simulation_time 1000000	//ms(TTI
 #define UE_dis_mode 1			//0: uniform 1:hotspot
 #define UE_type_number 3		//DB = 50, 100, 300ms
-#define UEnumber 20
+#define UEnumber 25
 
 #include<vector>
 
@@ -135,7 +135,6 @@ public:
 	double RateSatisfaction[UEnumber];				// 每個UE的rate satisfaction
 	double DelaySatisfaction[UEnumber];				// 每個UE的delay satisfaction
 	double AvgSystemTime;						// Queueing算出來的
-	double AvgSystemTime_paper;				// Queueing算出來的(原本論文用的算法)
 	double TotalThroughput;						// 用來記錄整體系統的throughput
 	int TotalSchedulePacketNum;					// 用來記錄整體系統排程多少packet
 	int TotalDiscardPacketNum;					// 用來記錄整體系統砍多少packet
@@ -183,7 +182,6 @@ public:
 		memset(RateSatisfaction, 0, sizeof(RateSatisfaction));
 		memset(DelaySatisfaction, 0, sizeof(DelaySatisfaction));
 		AvgSystemTime = 0.0;
-		AvgSystemTime_paper = 0.0;
 		TotalThroughput = 0.0;
 		TotalSchedulePacketNum = 0;
 		TotalDiscardPacketNum = 0;
