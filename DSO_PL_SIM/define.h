@@ -22,7 +22,7 @@
 #define simulation_time 1000000	//ms(TTI
 #define UE_dis_mode 1			//0: uniform 1:hotspot
 #define UE_type_number 3		//DB = 50, 100, 300ms
-#define UEnumber 25
+#define UEnumber 10
 
 #include<vector>
 
@@ -126,8 +126,9 @@ public:
 	int TotalPacketNum[UEnumber];					// 每個UE在eNB裡對應buffer的來的總packete個數
 	int DiscardIncompletePacketNum[UEnumber];		// 用來計算被砍掉的不完整的packet有幾個
 	int DiscardPacketNum[UEnumber];					// 每個UE在eNB裡對應buffer裡discard的packet數
-	int SchedulePackerNum[UEnumber];				// 每個UE在eNB裡對應buffer裡schedule的packet數
-													//double PacketDelay[UEnumber];					// 每個UE平均封包delay
+	int SchedulePacketNum[UEnumber];				// 每個UE在eNB裡對應buffer裡schedule的packet數
+	int RemainPacketNum[UEnumber];					// 程式結束後每個UE buffer剩餘的Packet量
+	//double PacketDelay[UEnumber];					// 每個UE平均封包delay
 	double Throughput[UEnumber];					// 每個UE的throughput
 	double Delay[UEnumber];							// 每個UE的封包在buffer裡等待的時間
 	double SystemTime[UEnumber];					// 每個UE的封包從進入buffer到傳送完成的時間
@@ -138,6 +139,7 @@ public:
 	double TotalThroughput;						// 用來記錄整體系統的throughput
 	int TotalSchedulePacketNum;					// 用來記錄整體系統排程多少packet
 	int TotalDiscardPacketNum;					// 用來記錄整體系統砍多少packet
+	int TotalRemainPacketNum;
 	double AverageThroughput;					// 用來記錄所有UE的平均throughput
 	double AverageDelay;						// 用來記錄所有UE的平均delay
 	double AverageTransmissionTime;
@@ -174,7 +176,8 @@ public:
 		memset(TotalPacketNum, 0, sizeof(TotalPacketNum));
 		memset(DiscardIncompletePacketNum, 0, sizeof(DiscardIncompletePacketNum));
 		memset(DiscardPacketNum, 0, sizeof(DiscardPacketNum));
-		memset(SchedulePackerNum, 0, sizeof(SchedulePackerNum));
+		memset(SchedulePacketNum, 0, sizeof(SchedulePacketNum));
+		memset(RemainPacketNum, 0, sizeof(RemainPacketNum));
 		memset(Throughput, 0, sizeof(Throughput));
 		memset(Delay, 0, sizeof(Delay));
 		memset(SystemTime, 0, sizeof(SystemTime));
@@ -185,6 +188,7 @@ public:
 		TotalThroughput = 0.0;
 		TotalSchedulePacketNum = 0;
 		TotalDiscardPacketNum = 0;
+		TotalRemainPacketNum = 0;
 		AverageThroughput = 0.0;
 		AverageDelay = 0.0;
 		AverageTransmissionTime = 0.0;

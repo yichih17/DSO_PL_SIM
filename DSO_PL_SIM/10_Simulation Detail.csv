@@ -1,0 +1,4 @@
+TotalSchedulePacketNum,TotalDiscardPacketNum,TotalRemainPacketNum,TotalThroughput,AvgThroughput,AvgSystemTime,AvgDelay,AvgTransmissionTime,QueueingMeanSystemTime,AvgPacketLossRatio
+124381,0,0,995.048,99.5048,5.2528,2.81105,2.44175,3.18246,0
+124908,0,0,999.264,99.9264,6.67096,3.51537,3.15559,3.84475,0
+125357,0,0,1002.86,100.286,2.57852,1.49596,1.08256,1.65041,0
