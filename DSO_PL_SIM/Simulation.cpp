@@ -138,8 +138,7 @@ void Simulation_Result(UE *UEList, SimulationResult *Result)
 		Xj = Xj + Xij * weight_i;
 		Xj2 = Xj2 + pow(Xij, 2) * weight_i;
 	}
-	double rho = lambda * Xj;
-	double right = lambda * Xj2 / (1 - lambda * Xj);
+	Result->Rho = lambda * Xj;
 	Result->AvgSystemTime = Xj + lambda * Xj2 / (1 - lambda * Xj);
 
 	// 計算整體的throughput、delay、schedule packet數、discard packet數
@@ -240,7 +239,7 @@ void OutputResult(string Scheme, SimulationResult *Result)
 		cout << "檔案無法開啟" << endl;
 	else
 	{
-		Write_SimulationResultFile << Result->AverageSystemTime << "," << Result->AvgSystemTime << endl;
+		Write_SimulationResultFile << Result->AverageSystemTime << "," << Result->AvgSystemTime << "," << Result->Rho << endl;
 	}
 
 
@@ -262,8 +261,8 @@ void OutputResult(string Scheme, SimulationResult *Result)
 	else
 	{
 		if (exist == 0)
-			Write_SimulationDetailFile << "TotalSchedulePacketNum,TotalDiscardPacketNum,TotalRemainPacketNum,TotalThroughput,AvgThroughput,AvgSystemTime,AvgDelay,AvgTransmissionTime,QueueingMeanSystemTime,AvgPacketLossRatio" << endl;
-		Write_SimulationDetailFile << Result->TotalSchedulePacketNum << "," << Result->TotalDiscardPacketNum << "," << Result->TotalRemainPacketNum << "," << Result->TotalThroughput << "," << Result->AverageThroughput << "," << Result->AverageSystemTime << "," << Result->AverageDelay << "," << Result->AverageTransmissionTime << "," << Result->AvgSystemTime << "," << Result->PacketLossRatio << endl;
+			Write_SimulationDetailFile << "TotalSchedulePacketNum,TotalDiscardPacketNum,TotalRemainPacketNum,TotalThroughput,AvgThroughput,AvgSystemTime,AvgDelay,AvgTransmissionTime,QueueingMeanSystemTime,AvgPacketLossRatio,Rho" << endl;
+		Write_SimulationDetailFile << Result->TotalSchedulePacketNum << "," << Result->TotalDiscardPacketNum << "," << Result->TotalRemainPacketNum << "," << Result->TotalThroughput << "," << Result->AverageThroughput << "," << Result->AverageSystemTime << "," << Result->AverageDelay << "," << Result->AverageTransmissionTime << "," << Result->AvgSystemTime << "," << Result->PacketLossRatio << "," << Result->Rho << endl;
 	}
 }
 
@@ -431,7 +430,7 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 
 int main()
 {
-	for (int times = 0; times < 100; times++)
+	for (int times = 0; times < 200; times++)
 	{
 		cout << "第 " << times << " 次" << endl;
 		for (int i = 0; i < UEnumber; i++)
