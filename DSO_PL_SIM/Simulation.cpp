@@ -247,9 +247,9 @@ void OutputResult(string Scheme, SimulationResult *Result)
 	Write_SimulationDetailFile.open(SimulationDetailFileName, ios::in);
 	if (Write_SimulationDetailFile)
 	{
-		char firstline[181];
+		char firstline[200];
 		Write_SimulationDetailFile >> firstline;
-		char cpline[] = "TotalSchedulePacketNum,TotalDiscardPacketNum,TotalRemainPacketNum,TotalThroughput,AvgThroughput,AvgSystemTime,AvgDelay,AvgTransmissionTime,QueueingMeanSystemTime,AvgPacketLossRatio\n";
+		char cpline[] = "TotalSchedulePacketNum,TotalDiscardPacketNum,TotalRemainPacketNum,TotalThroughput,AvgThroughput,AvgSystemTime,AvgDelay,AvgTransmissionTime,QueueingMeanSystemTime,AvgPacketLossRatio,Rho\n";
 		if (strcmp(firstline, cpline))
 			exist = 1;
 	}
