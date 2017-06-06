@@ -242,7 +242,6 @@ void OutputResult(string Scheme, SimulationResult *Result)
 		Write_SimulationResultFile << Result->AverageSystemTime << "," << Result->AvgSystemTime << "," << Result->Rho << endl;
 	}
 
-
 	int exist = 0;
 	Write_SimulationDetailFile.open(SimulationDetailFileName, ios::in);
 	if (Write_SimulationDetailFile)
@@ -430,7 +429,7 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 
 int main()
 {
-	for (int times = 0; times < 200; times++)
+	for (int times = 0; times < 1; times++)
 	{
 		cout << "第 " << times << " 次" << endl;
 		for (int i = 0; i < UEnumber; i++)
@@ -439,8 +438,9 @@ int main()
 		for (int i = 0; i < UEnumber; i++)
 		{
 			//Traffic request initial
-			UEList[i].bit_rate = 100;
+			UEList[i].bit_rate = 300;
 			UEList[i].packet_size = 8000;
+			UEList[i].lambdai = UEList[i].bit_rate / UEList[i].packet_size;
 			if (i < UEnumber *0.33)
 			{
 				DB50_UEnumber++;
@@ -459,14 +459,31 @@ int main()
 					UEList[i].delay_budget = 300;
 				}
 			}
-
-			//Coordiante initial
-			uniformdistribution(&UEList[i]);
-
-			//Other calculation
-			UEList[i].CQI = getCQI(&UEList[i]);
-			UEList[i].lambdai = UEList[i].bit_rate / UEList[i].packet_size;
 		}
+
+		//Coordiante initial
+		double utilization = 0.0;
+		do
+		{
+			for (int i = 0; i < UEnumber; i++)
+			{
+				uniformdistribution(&UEList[i]);
+				UEList[i].CQI = getCQI(&UEList[i]);
+			}
+
+			//Queueing model calculation
+			double Xj = 0.0;
+			double lambda = 0.0;
+			for (int i = 0; i < UEnumber; i++)
+				lambda = lambda + UEList[i].lambdai;
+			for (int i = 0; i < UEnumber; i++)
+			{
+				double weight_i = UEList[i].lambdai / lambda;
+				double Xij = UEList[i].packet_size / (resource_element * CQIEfficiency(UEList[i].CQI) * total_RBG);
+				Xj += (Xij * weight_i);
+			}
+			utilization = Xj*lambda;
+		} while (utilization > 1);			
 
 		//give packet arrival time
 		srand((unsigned)time(NULL));			//亂數種子
@@ -586,7 +603,9 @@ int main()
 
 		//Simulation start
 		BufferStatus EqualRB_Buffer;
+		BufferStatus EqualRB_Buffer_aft100wTTI;
 		SimulationResult EqualRB_Result;
+		SimulationResult EqualRB_Result_aft100wTTI;
 		for (int i = 0; i < UEnumber; i++)
 		{
 			EqualRB_Buffer.PacketArrivalTime[i].clear();
@@ -596,17 +615,26 @@ int main()
 
 		for (int t = 0; t < simulation_time; t++)
 		{
-			//if ((t + 1) % (simulation_time / 20) == 0)
-			//	cout << (double)(t + 1) / (double)simulation_time * 100 << "%" << endl;
+			if ((t + 1) % (simulation_time / 20) == 0)
+				cout << (double)(t + 1) / (double)simulation_time * 100 << "%, TTI=" << t + 1 << endl;
 
 			Buffer_Status(t, &EqualRB_Buffer, UEList, TempPacketArrivalTime, &EqualRB_Result);
 			EqualRB(t, &EqualRB_Buffer, UEList, &EqualRB_Result);
+
+			if (t == 1000000)
+			{
+				for (int i = 0; i < UEnumber; i++)
+					EqualRB_Result.RemainPacketNum[i] = EqualRB_Buffer.PacketArrivalTime[i].size();
+				Simulation_Result(UEList, &EqualRB_Result);
+
+				EqualRB_Buffer = EqualRB_Buffer_aft100wTTI;
+				EqualRB_Result = EqualRB_Result_aft100wTTI;
+			}
 		}
 
 		for (int i = 0; i < UEnumber; i++)
 			EqualRB_Result.RemainPacketNum[i] = EqualRB_Buffer.PacketArrivalTime[i].size();
 
 		Simulation_Result(UEList, &EqualRB_Result);
-	}
-	
+	}	
 }
