@@ -626,8 +626,6 @@ int main()
 				for (int i = 0; i < UEnumber; i++)
 					EqualRB_Result.RemainPacketNum[i] = EqualRB_Buffer.PacketArrivalTime[i].size();
 				Simulation_Result(UEList, &EqualRB_Result);
-
-				EqualRB_Buffer = EqualRB_Buffer_aft100wTTI;
 				EqualRB_Result = EqualRB_Result_aft100wTTI;
 			}
 		}

@@ -22,7 +22,7 @@
 #define simulation_time 10000000	//ms(TTI
 #define UE_dis_mode 1			//0: uniform 1:hotspot
 #define UE_type_number 3		//DB = 50, 100, 300ms
-#define UEnumber 25
+#define UEnumber 5
 
 #include<vector>
 
