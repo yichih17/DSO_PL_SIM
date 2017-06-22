@@ -159,9 +159,9 @@ void Simulation_Result(UE *UEList, SimulationResult *Result)
 		Result->TotalRemainPacketNum += Result->RemainPacketNum[i];
 	}
 	Result->AverageThroughput = Result->TotalThroughput / UEnumber;
-	Result->AverageDelay = DelayTemp / Result->TotalSchedulePacketNum;
+	Result->AverageDelay = DelayTemp / UEnumber;
 	Result->AverageTransmissionTime = TransmissionTimeTemp / Result->TotalSchedulePacketNum;
-	Result->AverageSystemTime = SystemTimeTemp / Result->TotalSchedulePacketNum;
+	Result->AverageSystemTime = SystemTimeTemp / UEnumber;
 	Result->PacketLossRatio = ((double)Result->TotalRemainPacketNum / (double)(Result->TotalSchedulePacketNum + Result->TotalRemainPacketNum)) * 100;
 
 	//// 計算typ1(VoIP)的throughput、delay、schedule packet數、discard packet數、rate滿意度、delay滿意度
@@ -390,10 +390,15 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 			else
 			{
 				RBSizeSpace -= Queue->HeadPacketSize[AssignedUE];
-				Result->Delay[AssignedUE] += ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);			// 計算每一個packet delay
-//				double WaitingTime = ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);					///在Queue裡等待的時間 (= Delay)
-				Result->SystemTime[AssignedUE] += ((t + 1) - Queue->PacketArrivalTime[AssignedUE][0]);		// 計算傳送到UE的時間
-				Result->SchedulePacketNum[AssignedUE] = Result->SchedulePacketNum[AssignedUE] + 1;
+				Result->SchedulePacketNum[AssignedUE] += 1;
+
+				double SystemTimeNow = (t + 1) - Queue->PacketArrivalTime[AssignedUE][0];
+				double SystemTimeHistory = Result->SystemTime[AssignedUE];
+				double K = Result->SchedulePacketNum[AssignedUE] - 1;
+				double K1 = Result->SchedulePacketNum[AssignedUE];
+				Result->SystemTime[AssignedUE] = ((K / K1) * SystemTimeHistory) + ((1 / K1) * SystemTimeNow);	// 計算每一個packet delay
+				Result->Delay[AssignedUE] = ((K / K1) * SystemTimeHistory) + ((1 / K1) * SystemTimeNow);		// 同上
+
 				Queue->PacketArrivalTime[AssignedUE].erase(Queue->PacketArrivalTime[AssignedUE].begin());
 //				Queue->PacketHOLDelay[AssignedUE].erase(Queue->PacketHOLDelay[AssignedUE].begin());
 				if (Queue->PacketArrivalTime[AssignedUE].size() == 0)										// 如果沒有資料要傳送就退出競爭
@@ -408,14 +413,14 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 	}
 
 	// 清算在這個TTI總共的時間花費
-	for (int i = 0; i < UEnumber; i++)
-	{
-		if (NumBitsTransmited[i] == 0)
-			continue;
-		double capacity = resource_element * CQIEfficiency(UEList[i].CQI) * NumRBAssigned[i];
-		Result->TransmissionTime[i] += (NumBitsTransmited[i] / capacity);
-		Result->SystemTime[i] += (NumBitsTransmited[i] / capacity);
-	}
+	//for (int i = 0; i < UEnumber; i++)
+	//{
+	//	if (NumBitsTransmited[i] == 0)
+	//		continue;
+	//	double capacity = resource_element * CQIEfficiency(UEList[i].CQI) * NumRBAssigned[i];
+	//	Result->TransmissionTime[i] += (NumBitsTransmited[i] / capacity);
+	//	Result->SystemTime[i] += (NumBitsTransmited[i] / capacity);
+	//}
 
 	// 計算每個UE在這TTI scheduling後的buffer裡有多少資料量
 	//for (int i = 0; i<UEnumber; i++)
@@ -429,7 +434,7 @@ void EqualRB(int t, BufferStatus *Queue, UE *UE, SimulationResult *Result)
 
 int main()
 {
-	for (int times = 0; times < 1; times++)
+	for (int times = 0; times < 10; times++)
 	{
 		cout << "第 " << times << " 次" << endl;
 		for (int i = 0; i < UEnumber; i++)
@@ -483,7 +488,7 @@ int main()
 				Xj += (Xij * weight_i);
 			}
 			utilization = Xj*lambda;
-		} while (utilization > 1);			
+		} while (utilization > 1);
 
 		//give packet arrival time
 		srand((unsigned)time(NULL));			//亂數種子
